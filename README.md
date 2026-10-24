@@ -51,13 +51,13 @@ The current architecture prioritizes local data storage and user-controlled noti
 
 ## Download Spendo AI
 
-**[Open Spendo AI releases and APK downloads](https://github.com/prudhvikakkunuri/Spendo-AI/releases)**
+**[Download the latest development APK](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest)** · [Browse all releases](https://github.com/prudhvikakkunuri/Spendo-AI/releases)
 
 Each published release will include its version notes and, when the release workflow completes successfully, a downloadable `spendo-ai.apk` asset.
 
-- **APK download:** Open the latest entry on the Releases page and download `spendo-ai.apk`.
+- **Latest development APK:** Open [Spendo AI — Latest Development Build](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest) and download `spendo-ai.apk`. This pre-release is automatically refreshed after a successful main-branch test/build.
 - **Development build:** Open [Android CI workflow runs](https://github.com/prudhvikakkunuri/Spendo-AI/actions/workflows/android-ci.yml), select a successful run, and download the `spendo-ai-debug-apk` artifact. CI artifacts are temporary and are not a substitute for a versioned release.
-- **No release available yet?** The first versioned release must be created by pushing a version tag. See [Build from source](#build-from-source) and the release workflow.
+- **Versioned releases:** Stable version tags such as `v0.1.0` trigger the versioned release workflow. The first run needs to complete successfully before its APK appears on the Releases page.
 
 > **Signing note:** A public release intended for ongoing use should be signed with a persistent release keystore. If repository signing secrets are not configured, the automated release workflow publishes a clearly labelled pre-release/testing APK. Debug APKs produced by separate CI runs may have different signing certificates and may not update an earlier installation. Never uninstall an existing app with important local data unless you have exported or backed it up.
 
@@ -161,7 +161,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ### Publish a versioned APK release
 
-The GitHub Actions release workflow is triggered by tags matching `v*`. After pushing your changes to `main`, create and push a version tag:
+The latest development build is published to the fixed [dev-latest release](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest) after a successful push to `main`. For a versioned release, create and push a tag matching `v*`:
 
 ```bash
 git checkout main
