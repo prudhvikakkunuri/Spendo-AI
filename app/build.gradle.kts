@@ -4,6 +4,13 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// CI/release workflows can override version metadata. Local builds stay usable
+// without any environment variables.
+val appVersionCode = providers.environmentVariable("ANDROID_VERSION_CODE")
+    .orNull?.toIntOrNull() ?: 1
+val appVersionName = providers.environmentVariable("ANDROID_VERSION_NAME")
+    .orNull?.takeIf { it.isNotBlank() } ?: "1.0.0"
+
 val releaseStorePath = System.getenv("ANDROID_KEYSTORE_PATH")
 val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
 val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
@@ -23,8 +30,8 @@ android {
         applicationId = "com.spendwise.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
