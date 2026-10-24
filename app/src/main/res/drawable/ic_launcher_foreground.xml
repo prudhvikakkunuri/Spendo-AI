@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- SpendWise Modern Minimalist Shield & Rupee Emblem -->
+    <path
+        android:fillColor="#B4F234"
+        android:pathData="M54,28 C42,28 34,34 34,44 L34,60 C34,72 44,80 54,84 C64,80 74,72 74,60 L74,44 C74,34 66,28 54,28 Z M54,34 C62,34 68,38 68,46 L68,59 C68,68 60,74 54,77 C48,74 40,68 40,59 L40,46 C40,38 46,34 54,34 Z" />
+    <path
+        android:fillColor="#B4F234"
+        android:pathData="M48,43 L60,43 L60,47 L48,47 Z" />
+    <path
+        android:fillColor="#B4F234"
+        android:pathData="M48,50 L60,50 L60,54 L48,54 Z" />
+    <path
+        android:fillColor="#B4F234"
+        android:pathData="M52,43 L56,43 L56,65 L52,65 Z" />
+</vector>

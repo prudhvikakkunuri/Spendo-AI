@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="charcoal_surface">#121417</color>
+    <color name="charcoal_bg">#0D0F11</color>
+    <color name="lime_accent">#B4F234</color>
+    <color name="white">#FFFFFF</color>
+</resources>

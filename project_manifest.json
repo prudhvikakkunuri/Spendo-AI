@@ -1,0 +1,26 @@
+{
+  "project_name": "SpendWise Android",
+  "status": "MVP specification",
+  "platform": "Android",
+  "stack": [
+    "Kotlin",
+    "Jetpack Compose",
+    "Material 3",
+    "Room",
+    "DataStore"
+  ],
+  "privacy": "Local-first; no bank integration; no external LLM in MVP",
+  "documents": [
+    "README.md",
+    "01_PRODUCT_REQUIREMENTS.md",
+    "02_SYSTEM_DESIGN.md",
+    "03_DATA_MODEL.md",
+    "04_NOTIFICATION_PARSING.md",
+    "05_UI_UX_SPEC.md",
+    "06_SECURITY_PRIVACY.md",
+    "07_TEST_PLAN.md",
+    "08_BUILD_ROADMAP.md",
+    "09_ANTIGRAVITY_MASTER_PROMPT.md",
+    "10_DECISIONS_AND_OPEN_QUESTIONS.md"
+  ]
+}

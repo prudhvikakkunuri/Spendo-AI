@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Spendo</string>
+    <string name="tab_dashboard">Dashboard</string>
+    <string name="tab_transactions">Transactions</string>
+    <string name="tab_review">Review</string>
+    <string name="tab_settings">Settings</string>
+</resources>
