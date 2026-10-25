@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases">
+  <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk">
     <img alt="Download APK" src="https://img.shields.io/badge/Download-Android%20APK-111111?style=for-the-badge&logo=android&logoColor=white" />
   </a>
   <a href="https://github.com/prudhvikakkunuri/Spendo-AI/actions/workflows/android-ci.yml">
@@ -51,11 +51,11 @@ The current architecture prioritizes local data storage and user-controlled noti
 
 ## Download Spendo AI
 
-**[Download the latest development APK](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest)** · [Browse all releases](https://github.com/prudhvikakkunuri/Spendo-AI/releases)
+**[Download the latest development APK](https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk)** · [Release notes](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest) · [Browse all releases](https://github.com/prudhvikakkunuri/Spendo-AI/releases)
 
 Each published release will include its version notes and, when the release workflow completes successfully, a downloadable `spendo-ai.apk` asset.
 
-- **Latest development APK:** Open [Spendo AI — Latest Development Build](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest) and download `spendo-ai.apk`. This pre-release is automatically refreshed after a successful main-branch test/build.
+- **Latest development APK:** [Download `spendo-ai.apk` directly](https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk) or read the [release notes](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest). This pre-release is refreshed after a successful main-branch test/build.
 - **Development build:** Open [Android CI workflow runs](https://github.com/prudhvikakkunuri/Spendo-AI/actions/workflows/android-ci.yml), select a successful run, and download the `spendo-ai-debug-apk` artifact. CI artifacts are temporary and are not a substitute for a versioned release.
 - **Versioned releases:** Stable version tags such as `v0.1.0` trigger the versioned release workflow. The first run needs to complete successfully before its APK appears on the Releases page.
 
