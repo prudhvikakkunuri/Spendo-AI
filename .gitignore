@@ -24,4 +24,5 @@ keystore.properties
 # Website dependencies and build output
 website/node_modules/
 website/dist/
+website/dist-ssr/
 website/.env*

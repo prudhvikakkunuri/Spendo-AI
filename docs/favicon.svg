@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="12" fill="#09090B"/>
+  <rect x="1" y="1" width="46" height="46" rx="11" stroke="#27272E" stroke-width="2"/>
+  <!-- Geometric Nothing-inspired Spendo glyph -->
+  <circle cx="16" cy="14" r="3.5" fill="#F4F4F5"/>
+  <circle cx="24" cy="14" r="3.5" fill="#F4F4F5"/>
+  <circle cx="32" cy="14" r="3.5" fill="#F4F4F5"/>
+  <circle cx="16" cy="22" r="3.5" fill="#F4F4F5"/>
+  <circle cx="24" cy="24" r="3.5" fill="#D71920"/>
+  <circle cx="32" cy="26" r="3.5" fill="#F4F4F5"/>
+  <circle cx="16" cy="34" r="3.5" fill="#F4F4F5"/>
+  <circle cx="24" cy="34" r="3.5" fill="#F4F4F5"/>
+  <circle cx="32" cy="34" r="3.5" fill="#F4F4F5"/>
+</svg>
