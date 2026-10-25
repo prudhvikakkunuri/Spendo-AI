@@ -25,6 +25,12 @@
   <img alt="Status" src="https://img.shields.io/badge/Status-In%20development-orange" />
 </p>
 
+<p align="center">
+  <a href="https://prudhvikakkunuri.github.io/Spendo-AI/">🌐 Project website</a> ·
+  <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk">⬇ Download Android APK</a> ·
+  <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases">Releases</a>
+</p>
+
 ---
 
 ## Table of contents
