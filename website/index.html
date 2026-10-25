@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Primary SEO Meta Tags -->
+  <title>Spendo — AI Expense Tracker & Personal Finance App for Android</title>
+  <meta name="title" content="Spendo — AI Expense Tracker & Personal Finance App for Android" />
+  <meta name="description"
+    content="Meet Spendo, an on-device personal finance and AI expense tracker for Android. Automatically catches bank UPI & card transactions from notifications, manages budgets, and provides smart money insights with 100% data privacy." />
+  <meta name="keywords"
+    content="spendo, spendo ai, expense tracker, android expense tracker, upi expense tracker, ai finance app, personal finance app, automatic expense tracking, offline budget manager, nothing os expense tracker, jetpack compose finance" />
+  <meta name="author" content="Prudhvi Kakkunuri" />
+  <meta name="application-name" content="Spendo" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="canonical" href="https://prudhvikakkunuri.github.io/Spendo-AI/" />
+
+  <!-- Favicon & Icons -->
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="apple-touch-icon" href="./favicon.svg" />
+  <meta name="theme-color" content="#09090B" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#FAFAFA" media="(prefers-color-scheme: light)" />
+
+  <!-- Open Graph / Facebook / WhatsApp -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://prudhvikakkunuri.github.io/Spendo-AI/" />
+  <meta property="og:title" content="Spendo — Your AI Money Agent for Android" />
+  <meta property="og:description"
+    content="Track expenses in seconds. Notice bank UPI & card spends on-device. 100% private Room SQLite storage, voice expense logging, and interactive Android widgets." />
+  <meta property="og:image" content="https://prudhvikakkunuri.github.io/Spendo-AI/favicon.svg" />
+  <meta property="og:site_name" content="Spendo" />
+  <meta property="og:locale" content="en_IN" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://prudhvikakkunuri.github.io/Spendo-AI/" />
+  <meta name="twitter:title" content="Spendo — Your AI Money Agent for Android" />
+  <meta name="twitter:description"
+    content="Track expenses in seconds. Notice bank UPI & card spends on-device with 100% data privacy." />
+  <meta name="twitter:image" content="https://prudhvikakkunuri.github.io/Spendo-AI/favicon.svg" />
+
+  <!-- Fonts: Space Grotesk & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
+
+  <!-- Theme Initialization Script (Prevents flash of unstyled theme) -->
+  <script>
+    (function () {
+      try {
+        const stored = localStorage.getItem('spendo-theme');
+        if (stored === 'light') {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
+        } else {
+          document.documentElement.classList.remove('light');
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
+  <!-- JSON-LD: SoftwareApplication -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Spendo — Your AI Money Agent",
+      "alternateName": "Spendo AI",
+      "applicationCategory": "FinanceApplication",
+      "applicationSubCategory": "Personal Finance, Budgeting & Expense Tracker",
+      "operatingSystem": "Android 8.0+",
+      "url": "https://prudhvikakkunuri.github.io/Spendo-AI/",
+      "downloadUrl": "https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk",
+      "softwareVersion": "dev-latest",
+      "description": "An on-device, privacy-first personal finance and expense-tracking application for Android. Features notification transaction detection, voice logging, interactive home widgets, and offline deterministic financial calculation.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "INR",
+        "availability": "https://schema.org/InStock"
+      },
+      "featureList": [
+        "On-device notification-based debit/credit transaction detection",
+        "Local-first Room SQLite storage with zero cloud telemetry",
+        "Voice-powered natural language expense entry with review confirmation",
+        "Spendo AI Money Agent with local deterministic financial answering",
+        "Android 2x2 and 4x2 interactive home-screen widgets for 1-tap logging",
+        "Multi-bank balance tracking & inter-bank transfers",
+        "Verification Desk for inspecting and editing ambiguous merchant alerts",
+        "Biometric app lock and PBKDF2 salt-hashed master password security",
+        "SAF-compliant CSV transaction import and export"
+      ]
+    }
+    </script>
+
+  <!-- JSON-LD: WebSite -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Spendo",
+      "url": "https://prudhvikakkunuri.github.io/Spendo-AI/"
+    }
+    </script>
+</head>
+
+<body>
+  <div id="root"></div>
+
+  <!-- Fallback Semantic HTML for Web Crawlers and Search Engines -->
+  <noscript>
+    <header>
+      <h1>Spendo — Your AI Money Agent for Android</h1>
+      <p>A privacy-first, on-device personal finance app for tracking transactions, monitoring budgets, and
+        understanding spending with AI.</p>
+      <nav>
+        <a href="#features">Features</a> ·
+        <a href="#how-it-works">How It Works</a> ·
+        <a href="#widgets">Home Widgets</a> ·
+        <a href="#privacy">Privacy &amp; Security</a> ·
+        <a href="#roadmap">Roadmap</a> ·
+        <a href="#download">Download APK</a> ·
+        <a href="#faq">FAQ</a>
+      </nav>
+    </header>
+    <main>
+      <section id="features">
+        <h2>Core Features</h2>
+        <ul>
+          <li><strong>Smart Expense Tracking:</strong> Organize expenses, income, transfers, and refunds with rich
+            categorization.</li>
+          <li><strong>Notification Ingestion:</strong> Detect UPI and card spending from user-selected banking apps
+            on-device.</li>
+          <li><strong>Voice-Powered Entry:</strong> Speak naturally (e.g., "Paid ₹350 for lunch at Swiggy") to create an
+            editable draft.</li>
+          <li><strong>Spendo AI Money Agent:</strong> Deterministic, offline financial answers derived from your actual
+            SQLite database.</li>
+          <li><strong>Home-Screen Widgets:</strong> 2x2 and 4x2 Android widgets with live spend tracking and quick-entry
+            actions.</li>
+          <li><strong>100% On-Device Privacy:</strong> No external analytics, no cloud telemetry, no SMS permissions
+            required.</li>
+        </ul>
+      </section>
+      <section id="download">
+        <h2>Download Spendo for Android</h2>
+        <p>Download the latest development APK directly from our GitHub Releases:</p>
+        <p><a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk">Download
+            spendo-ai.apk (Android 8.0+)</a></p>
+        <p>Source code available at: <a
+            href="https://github.com/prudhvikakkunuri/Spendo-AI">https://github.com/prudhvikakkunuri/Spendo-AI</a></p>
+      </section>
+    </main>
+  </noscript>
+
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

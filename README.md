@@ -6,14 +6,14 @@
 </p>
 
 <p align="center">
+  <a href="https://prudhvikakkunuri.github.io/Spendo-AI/">
+    <img alt="Official Website" src="https://img.shields.io/badge/Official%20Website-Spendo-D71920?style=for-the-badge&logo=googlechrome&logoColor=white" />
+  </a>
   <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk">
     <img alt="Download APK" src="https://img.shields.io/badge/Download-Android%20APK-111111?style=for-the-badge&logo=android&logoColor=white" />
   </a>
   <a href="https://github.com/prudhvikakkunuri/Spendo-AI/actions/workflows/android-ci.yml">
     <img alt="Android CI" src="https://img.shields.io/github/actions/workflow/status/prudhvikakkunuri/Spendo-AI/android-ci.yml?branch=main&label=Android%20CI&style=for-the-badge" />
-  </a>
-  <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases">
-    <img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/prudhvikakkunuri/Spendo-AI/total?label=APK%20downloads&logo=github&style=for-the-badge" />
   </a>
 </p>
 
@@ -21,8 +21,8 @@
   <img alt="Android" src="https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white" />
   <img alt="Kotlin" src="https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white" />
   <img alt="Jetpack Compose" src="https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white" />
-  <img alt="Local-first" src="https://img.shields.io/badge/Design-Local--first-555555" />
-  <img alt="Status" src="https://img.shields.io/badge/Status-In%20development-orange" />
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-140%20Passing-22C55E?logo=junit5&logoColor=white" />
+  <img alt="Local-first" src="https://img.shields.io/badge/Design-100%25%20On--Device-555555" />
 </p>
 
 <p align="center">
