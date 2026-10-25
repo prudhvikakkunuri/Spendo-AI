@@ -15,6 +15,9 @@ interface BankAccountDao {
     @Query("SELECT * FROM bank_accounts ORDER BY isPrimary DESC, bankName ASC")
     fun getAllBankAccounts(): Flow<List<BankAccountEntity>>
 
+    @Query("SELECT * FROM bank_accounts ORDER BY isPrimary DESC, bankName ASC")
+    suspend fun getAllBankAccountsDirect(): List<BankAccountEntity>
+
     @Query("SELECT * FROM bank_accounts WHERE id = :id LIMIT 1")
     fun getBankAccountById(id: String): Flow<BankAccountEntity?>
 
@@ -23,6 +26,12 @@ interface BankAccountDao {
 
     @Query("SELECT * FROM bank_accounts WHERE bankName = :bankName LIMIT 1")
     suspend fun getBankAccountByNameDirect(bankName: String): BankAccountEntity?
+
+    @Query("SELECT * FROM bank_accounts WHERE bankName = :bankName")
+    suspend fun getBankAccountsByNameDirectList(bankName: String): List<BankAccountEntity>
+
+    @Query("SELECT * FROM bank_accounts WHERE bankName = :bankName AND maskedAccountNumber = :maskedNumber LIMIT 1")
+    suspend fun getBankAccountByNameAndNumberDirect(bankName: String, maskedNumber: String): BankAccountEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBankAccount(account: BankAccountEntity)

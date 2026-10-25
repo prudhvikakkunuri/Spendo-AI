@@ -22,11 +22,33 @@ import com.spendwise.android.ui.spendo.theme.SpendoColor
 
 @Composable
 fun SpendoApp(
-    viewModel: SpendoViewModel = viewModel()
+    viewModel: SpendoViewModel = viewModel(),
+    initialRoute: String? = null,
+    onRouteConsumed: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: SpendoScreen.Home.route
+
+    androidx.compose.runtime.LaunchedEffect(initialRoute) {
+        if (!initialRoute.isNullOrBlank()) {
+            val destination = when (initialRoute) {
+                "add_transaction" -> SpendoScreen.AddTransaction.route
+                "voice_expense", "spendo_ai" -> SpendoScreen.SpendoAi.route
+                "activity", "review" -> SpendoScreen.Activity.route
+                "analytics" -> SpendoScreen.Analytics.route
+                "banks" -> SpendoScreen.Banks.route
+                "settings" -> SpendoScreen.Settings.route
+                else -> null
+            }
+            if (destination != null && destination != currentRoute) {
+                navController.navigate(destination) {
+                    launchSingleTop = true
+                }
+            }
+            onRouteConsumed()
+        }
+    }
 
     val uiState by viewModel.uiState.collectAsState()
 

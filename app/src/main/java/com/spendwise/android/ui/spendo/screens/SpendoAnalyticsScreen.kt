@@ -65,10 +65,43 @@ fun SpendoAnalyticsScreen(
     var selectedTimeframe by remember { mutableStateOf("Monthly") }
     var purchaseInputText by remember { mutableStateOf("") }
 
-    // Dynamic Financial Calculations from local ledger
-    val expenseTransactions = uiState.transactions.filter { it.type == TransactionType.EXPENSE }
+    // Dynamic Financial Calculations from local ledger with active Timeframe Filtering
+    val now = System.currentTimeMillis()
+    val startOfToday = remember(now) {
+        java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    val startOfSevenDaysAgo = remember(now) { now - (7L * 24 * 60 * 60 * 1000) }
+    val startOfMonth = remember(now) {
+        java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.DAY_OF_MONTH, 1)
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    val filteredTransactions = remember(uiState.transactions, selectedTimeframe) {
+        when (selectedTimeframe) {
+            "Daily" -> uiState.transactions.filter { it.occurredAtEpochMs >= startOfToday }
+            "Weekly" -> uiState.transactions.filter { it.occurredAtEpochMs >= startOfSevenDaysAgo }
+            else -> uiState.transactions.filter { it.occurredAtEpochMs >= startOfMonth }
+        }
+    }
+
+    val expenseTransactions = filteredTransactions.filter { it.type == TransactionType.EXPENSE }
     val totalExpensePaise = expenseTransactions.sumOf { it.amountPaise }
-    val monthSpentRupees = totalExpensePaise / 100.0
+    val totalIncomePaise = filteredTransactions.filter { it.type == TransactionType.INCOME || it.category.equals("REFUND", ignoreCase = true) }
+        .distinctBy { it.id }
+        .sumOf { it.amountPaise }
+
+    val timeframeSpentRupees = totalExpensePaise / 100.0
+    val timeframeIncomeRupees = totalIncomePaise / 100.0
 
     // Dynamic Category Spend Breakdown
     val categoryTotals = expenseTransactions
@@ -133,7 +166,7 @@ fun SpendoAnalyticsScreen(
                 }
             }
 
-            // Overview Metric Card (Dynamically computed)
+            // Overview Metric Card (Dynamically computed from selected timeframe)
             SpendoDarkCard {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
@@ -155,17 +188,29 @@ fun SpendoAnalyticsScreen(
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        DotMatrixText(text = "Total Tracked Outflow", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
+                        DotMatrixText(text = "Tracked Outflow ($selectedTimeframe)", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
                         DotMatrixAmount(
-                            amountText = "%,.2f".format(Locale.ENGLISH, monthSpentRupees),
+                            amountText = "%,.2f".format(Locale.ENGLISH, timeframeSpentRupees),
                             fontSize = 32.sp,
                             color = SpendoColor.CardDarkText
                         )
-                        DotMatrixText(
-                            text = "Locally calculated from ${expenseTransactions.size} verified expenses",
-                            fontSize = 10.sp,
-                            color = SpendoColor.CardDarkTextSecondary
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            DotMatrixText(
+                                text = "${expenseTransactions.size} verified debit transactions",
+                                fontSize = 10.sp,
+                                color = SpendoColor.CardDarkTextSecondary
+                            )
+                            if (totalIncomePaise > 0L) {
+                                DotMatrixText(
+                                    text = "Inflow: ₹%,.0f".format(Locale.ENGLISH, timeframeIncomeRupees),
+                                    fontSize = 10.sp,
+                                    color = SpendoColor.SuccessGreen
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -180,15 +225,17 @@ fun SpendoAnalyticsScreen(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             DotMatrixText(text = "Top Expense Destination", fontSize = 10.sp, color = SpendoColor.TextSecondary)
+                            val merchantAmountStr = "₹%,.2f".format(Locale.ENGLISH, amountPaise / 100.0)
                             Text(
-                                text = "$merchant (₹%,.2f)".format(Locale.ENGLISH, amountPaise / 100.0),
+                                text = "$merchant ($merchantAmountStr)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = SpendoColor.TextPrimary
                             )
                             val pct = if (totalExpensePaise > 0) (amountPaise.toDouble() / totalExpensePaise) * 100 else 0.0
+                            val pctStr = String.format(Locale.ENGLISH, "%.1f", pct)
                             Text(
-                                text = "Accounts for %.1f%% of all tracked expenses.".format(Locale.ENGLISH, pct),
+                                text = "Accounts for $pctStr% of tracked expenses in this period.",
                                 fontSize = 12.sp,
                                 color = SpendoColor.TextSecondary
                             )
@@ -207,17 +254,18 @@ fun SpendoAnalyticsScreen(
             // Dynamic Category Breakdown
             SpendoCard(contentPadding = 18.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    DotMatrixText(text = "Category Distribution", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+                    DotMatrixText(text = "Category Distribution ($selectedTimeframe)", fontSize = 11.sp, color = SpendoColor.TextSecondary)
 
                     if (categoryTotals.isEmpty()) {
                         Text(
-                            text = "No category data available yet.",
+                            text = "No category expense data recorded for this $selectedTimeframe period.",
                             fontSize = 12.sp,
                             color = SpendoColor.TextSecondary
                         )
                     } else {
                         categoryTotals.take(6).forEach { (cat, amountPaise) ->
                             val pct = if (totalExpensePaise > 0) ((amountPaise.toDouble() / totalExpensePaise) * 100).toInt() else 0
+                            val formattedPaise = "₹%,.2f".format(Locale.ENGLISH, amountPaise / 100.0)
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -230,7 +278,7 @@ fun SpendoAnalyticsScreen(
                                         color = SpendoColor.TextPrimary
                                     )
                                     Text(
-                                        text = "₹%,.2f ($pct%)".format(Locale.ENGLISH, amountPaise / 100.0),
+                                        text = "$formattedPaise ($pct%)",
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,

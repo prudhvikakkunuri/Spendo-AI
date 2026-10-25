@@ -49,7 +49,7 @@ import com.spendwise.android.ui.spendo.theme.SpendoColor
 fun SpendoAddTransactionScreen(
     banks: List<SpendoBank>,
     initialType: TransactionType = TransactionType.EXPENSE,
-    onSaveTransaction: (merchant: String, amountPaise: Long, type: TransactionType, category: String, bankName: String, note: String?) -> Unit,
+    onSaveTransaction: (merchant: String, amountPaise: Long, type: TransactionType, category: String, bankName: String, note: String?, bankAccountId: String?) -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -58,7 +58,8 @@ fun SpendoAddTransactionScreen(
     var merchantInput by remember { mutableStateOf("") }
     var noteInput by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Food & Drink") }
-    var selectedBankName by remember { mutableStateOf(banks.firstOrNull()?.bankName ?: "HDFC Bank") }
+    var selectedBankId by remember { mutableStateOf(banks.firstOrNull()?.id) }
+    var selectedBankName by remember { mutableStateOf(banks.firstOrNull()?.displayName ?: "HDFC Bank") }
 
     val expenseCategories = listOf("Food & Drink", "Transit", "Groceries", "Shopping", "Bills & Utilities", "Entertainment", "Other")
     val incomeCategories = listOf("Salary", "Freelance", "Dividends", "Gift / Refund", "Other Income")
@@ -252,11 +253,14 @@ fun SpendoAddTransactionScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         banks.forEach { bank ->
-                            val isSelected = selectedBankName == bank.bankName
+                            val isSelected = selectedBankId == bank.id
                             FilterChip(
                                 selected = isSelected,
-                                onClick = { selectedBankName = bank.bankName },
-                                label = { Text("${bank.bankName} (${bank.maskedAccountNumber})", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                                onClick = {
+                                    selectedBankId = bank.id
+                                    selectedBankName = bank.displayName
+                                },
+                                label = { Text("${bank.displayName} (${bank.maskedAccountNumber})", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
                                 shape = RoundedCornerShape(20.dp),
                                 border = BorderStroke(1.dp, if (isSelected) SpendoColor.TextPrimary else SpendoColor.Divider),
                                 colors = FilterChipDefaults.filterChipColors(
@@ -285,7 +289,8 @@ fun SpendoAddTransactionScreen(
                                 transactionType,
                                 selectedCategory,
                                 selectedBankName,
-                                noteInput.ifBlank { null }
+                                noteInput.ifBlank { null },
+                                selectedBankId
                             )
                             onNavigateBack()
                         }

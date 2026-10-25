@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -32,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -67,9 +69,11 @@ fun SpendoAiConfigScreen(
     onTestConnection: () -> Unit,
     onSaveConfig: () -> Unit,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDeleteConfig: () -> Unit = {}
 ) {
     var isPasswordVisible by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -289,7 +293,47 @@ fun SpendoAiConfigScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Delete / Reset Key Action
+            if (aiConfig.isConfigured || aiConfig.apiKey.isNotBlank()) {
+                SpendoOutlinedButton(
+                    text = "Delete Configuration",
+                    onClick = { showDeleteConfirmDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    borderColor = SpendoColor.AccentRed.copy(alpha = 0.5f),
+                    contentColor = SpendoColor.AccentRed
+                )
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = {
+                Text("Delete API Configuration?", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("This will remove your encrypted API key and revert Spendo AI to offline mode.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDeleteConfig()
+                    }
+                ) {
+                    Text("Delete", color = SpendoColor.AccentRed, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancel", color = SpendoColor.TextSecondary)
+                }
+            },
+            containerColor = SpendoColor.Surface,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 }

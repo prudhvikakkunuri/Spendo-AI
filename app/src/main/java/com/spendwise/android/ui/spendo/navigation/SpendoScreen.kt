@@ -1,5 +1,7 @@
 package com.spendwise.android.ui.spendo.navigation
 
+import com.spendwise.android.ui.spendo.model.TransactionType
+
 /**
  * Route identifiers for all 17 Spendo screens.
  */
@@ -12,7 +14,9 @@ sealed class SpendoScreen(val route: String) {
 
     // Secondary Feature Screens
     object Notifications : SpendoScreen("spendo_notifications")
-    object AddTransaction : SpendoScreen("spendo_add_transaction")
+    object AddTransaction : SpendoScreen("spendo_add_transaction") {
+        fun createRoute(type: TransactionType = TransactionType.EXPENSE) = "spendo_add_transaction?type=${type.name}"
+    }
     object TransactionDetail : SpendoScreen("spendo_transaction_detail/{transactionId}") {
         fun createRoute(transactionId: String) = "spendo_transaction_detail/$transactionId"
     }

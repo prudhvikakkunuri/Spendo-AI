@@ -47,8 +47,14 @@ class SpendWiseApplication : Application() {
         com.spendwise.android.notification.NotificationIngestionEngine(database.transactionDao())
     }
 
+    companion object {
+        lateinit var instance: SpendWiseApplication
+            private set
+    }
+
     override fun onCreate() {
         super.onCreate()
+        instance = this
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             android.util.Log.e("SpendWiseCrash", "FATAL EXCEPTION on thread ${thread.name}: ${throwable.message}", throwable)

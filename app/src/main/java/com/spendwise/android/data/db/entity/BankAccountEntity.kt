@@ -18,5 +18,7 @@ data class BankAccountEntity(
     val openingBalancePaise: Long,
     val isPrimary: Boolean = false,
     val createdAtEpochMs: Long,
-    val updatedAtEpochMs: Long
+    val updatedAtEpochMs: Long,
+    val accountNickname: String? = null,
+    val notes: String? = null
 )

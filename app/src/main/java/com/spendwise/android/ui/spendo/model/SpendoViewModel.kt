@@ -18,6 +18,10 @@ import kotlinx.coroutines.launch
 import com.spendwise.android.ui.spendo.theme.ThemeMode
 import com.spendwise.android.domain.voice.VoiceFinancialParser
 import com.spendwise.android.domain.voice.VoiceIntent
+import com.spendwise.android.data.db.entity.TransactionEntity
+import com.spendwise.android.util.CsvImportResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 data class SpendoUiState(
@@ -125,6 +129,31 @@ class SpendoViewModel(
         viewModelScope.launch {
             val hasCustom = securityManager.hasCustomPassword()
             _uiState.update { it.copy(hasCustomPassword = hasCustom) }
+        }
+
+        // Restore persisted AI configuration on startup
+        viewModelScope.launch {
+            repo.activeAiConfig.collectLatest { config ->
+                if (config != null && config.isConfigured) {
+                    val apiKey = repo.loadSecureAiApiKey(config.providerId) ?: ""
+                    val provider = try {
+                        AiProvider.valueOf(config.providerId)
+                    } catch (_: Exception) {
+                        AiProvider.GROQ
+                    }
+                    _uiState.update {
+                        it.copy(
+                            aiConfig = it.aiConfig.copy(
+                                isConfigured = true,
+                                provider = provider,
+                                model = config.selectedModel.ifBlank { provider.defaultModel },
+                                apiKey = apiKey,
+                                testConnectionMessage = config.lastTestMessage
+                            )
+                        )
+                    }
+                }
+            }
         }
 
         // Observe transactions & apply reactive filters
@@ -267,7 +296,8 @@ class SpendoViewModel(
         type: TransactionType,
         category: String,
         bankAccountName: String,
-        note: String?
+        note: String?,
+        bankAccountId: String? = null
     ) {
         val repo = repository
         if (repo != null) {
@@ -278,7 +308,8 @@ class SpendoViewModel(
                         amountPaise = amountPaise,
                         category = category,
                         bankAccountName = bankAccountName,
-                        note = note
+                        note = note,
+                        bankAccountId = bankAccountId
                     )
                 } else {
                     repo.addIncome(
@@ -286,7 +317,8 @@ class SpendoViewModel(
                         amountPaise = amountPaise,
                         category = category,
                         bankAccountName = bankAccountName,
-                        note = note
+                        note = note,
+                        bankAccountId = bankAccountId
                     )
                 }
             }
@@ -301,7 +333,8 @@ class SpendoViewModel(
                 occurredAtEpochMs = System.currentTimeMillis(),
                 bankAccountName = bankAccountName,
                 source = TransactionSource.MANUAL,
-                note = note
+                note = note,
+                bankAccountId = bankAccountId
             )
 
             _uiState.update { state ->
@@ -409,21 +442,103 @@ class SpendoViewModel(
         _uiState.update { it.copy(isBalancesRevealed = false) }
     }
 
-    fun addBank(name: String, type: String, initialPaise: Long) {
+    fun addBank(
+        name: String,
+        type: String,
+        initialPaise: Long,
+        nickname: String? = null,
+        maskedNumber: String? = null,
+        notes: String? = null
+    ) {
         val repo = repository
+        val finalMasked = if (!maskedNumber.isNullOrBlank()) {
+            val digits = maskedNumber.filter { it.isDigit() }
+            if (digits.length >= 4) "•••• ${digits.takeLast(4)}" else maskedNumber
+        } else {
+            "•••• ${(1000..9999).random()}"
+        }
         if (repo != null) {
             viewModelScope.launch {
-                repo.addBankAccount(name, type, initialPaise)
+                repo.addBankAccount(
+                    bankName = name,
+                    accountType = type,
+                    initialBalancePaise = initialPaise,
+                    maskedNumber = finalMasked,
+                    accountNickname = nickname,
+                    notes = notes
+                )
             }
         } else {
             val newBank = SpendoBank(
                 id = "bank_${System.currentTimeMillis()}",
                 bankName = name,
                 accountType = type,
-                maskedAccountNumber = "•••• ${ (1000..9999).random() }",
-                balancePaise = initialPaise
+                maskedAccountNumber = finalMasked,
+                balancePaise = initialPaise,
+                accountNickname = nickname,
+                notes = notes
             )
             _uiState.update { it.copy(banks = it.banks + newBank) }
+        }
+    }
+
+    fun editBank(
+        id: String,
+        name: String,
+        type: String,
+        balancePaise: Long,
+        nickname: String? = null,
+        maskedNumber: String? = null,
+        notes: String? = null
+    ) {
+        val repo = repository
+        val finalMasked = if (!maskedNumber.isNullOrBlank()) {
+            val digits = maskedNumber.filter { it.isDigit() }
+            if (digits.length >= 4) "•••• ${digits.takeLast(4)}" else maskedNumber
+        } else {
+            "•••• ${(1000..9999).random()}"
+        }
+        if (repo != null) {
+            viewModelScope.launch {
+                repo.updateBankAccountDetails(
+                    id = id,
+                    bankName = name,
+                    accountNickname = nickname,
+                    accountType = type,
+                    maskedNumber = finalMasked,
+                    balancePaise = balancePaise,
+                    notes = notes
+                )
+            }
+        } else {
+            _uiState.update { state ->
+                val updated = state.banks.map {
+                    if (it.id == id) {
+                        it.copy(
+                            bankName = name,
+                            accountType = type,
+                            balancePaise = balancePaise,
+                            maskedAccountNumber = finalMasked,
+                            accountNickname = nickname,
+                            notes = notes
+                        )
+                    } else it
+                }
+                state.copy(banks = updated)
+            }
+        }
+    }
+
+    fun deleteBank(id: String) {
+        val repo = repository
+        if (repo != null) {
+            viewModelScope.launch {
+                repo.deleteBankAccount(id)
+            }
+        } else {
+            _uiState.update { state ->
+                state.copy(banks = state.banks.filterNot { it.id == id })
+            }
         }
     }
 
@@ -500,7 +615,7 @@ class SpendoViewModel(
         if (messageText.isBlank()) return
 
         val userMessage = SpendoChatMessage(
-            id = "msg_${System.currentTimeMillis()}",
+            id = "msg_user_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}",
             sender = "USER",
             text = messageText
         )
@@ -521,141 +636,258 @@ class SpendoViewModel(
 
             var pendingConfirmation: PendingExpenseConfirmation? = null
 
-            val responseText = when (voiceIntent) {
-                is VoiceIntent.AddExpense -> {
-                    val rememberedCategory = repo?.getMerchantCategoryRuleDirect(voiceIntent.merchant) ?: voiceIntent.category
-                    val pending = PendingExpenseConfirmation(
-                        amountPaise = voiceIntent.amountPaise,
-                        merchant = voiceIntent.merchant,
-                        category = rememberedCategory,
-                        bankName = voiceIntent.bankName
-                    )
-                    pendingConfirmation = pending
-                    "I extracted this expense. Please verify the details below and confirm to record it to your ledger:\n• Amount: ₹%,.2f\n• Merchant: %s\n• Category: %s\n• Account: %s"
-                        .format(Locale.ENGLISH, pending.amountPaise / 100.0, pending.merchant, pending.category, pending.bankName)
-                }
-                is VoiceIntent.AtmWithdrawal -> {
-                    addTransaction(
-                        merchant = "ATM Cash Withdrawal",
-                        amountPaise = voiceIntent.amountPaise,
-                        type = TransactionType.EXPENSE,
-                        category = "TRANSFER",
-                        bankAccountName = voiceIntent.bankName,
-                        note = "ATM Cash Withdrawal to Cash Wallet"
-                    )
-                    "✓ Recorded ATM withdrawal: ₹%,.2f from %s transferred to your Cash Wallet. (Handled as a transfer; not double-counted as an expense)."
-                        .format(Locale.ENGLISH, voiceIntent.amountPaise / 100.0, voiceIntent.bankName)
-                }
-                is VoiceIntent.InquireBalance -> {
-                    val banks = currentState.banks
-                    if (voiceIntent.targetBank != null) {
-                        val matched = banks.find { it.bankName.contains(voiceIntent.targetBank, ignoreCase = true) }
-                            ?: banks.firstOrNull()
-                        if (matched != null) {
-                            "Balance for %s (%s): ₹%,.2f [%s source • %s]."
-                                .format(Locale.ENGLISH, matched.bankName, matched.maskedAccountNumber, matched.balancePaise / 100.0, matched.balanceSource.name, matched.lastUpdatedText)
+            val responseText = try {
+                when (voiceIntent) {
+                    is VoiceIntent.AddExpense -> {
+                        val rememberedCategory = repo?.getMerchantCategoryRuleDirect(voiceIntent.merchant) ?: voiceIntent.category
+                        val pending = PendingExpenseConfirmation(
+                            amountPaise = voiceIntent.amountPaise,
+                            merchant = voiceIntent.merchant,
+                            category = rememberedCategory,
+                            bankName = voiceIntent.bankName
+                        )
+                        pendingConfirmation = pending
+                        val amtFormatted = "₹%,.2f".format(Locale.ENGLISH, pending.amountPaise / 100.0)
+                        "I extracted this expense. Please verify the details below and confirm to record it to your ledger:\n• Amount: $amtFormatted\n• Merchant: ${pending.merchant}\n• Category: ${pending.category}\n• Account: ${pending.bankName}"
+                    }
+                    is VoiceIntent.AddIncome -> {
+                        val pending = PendingExpenseConfirmation(
+                            amountPaise = voiceIntent.amountPaise,
+                            merchant = voiceIntent.source,
+                            category = voiceIntent.category,
+                            bankName = voiceIntent.bankName
+                        )
+                        pendingConfirmation = pending
+                        val amtFormatted = "₹%,.2f".format(Locale.ENGLISH, pending.amountPaise / 100.0)
+                        "I extracted this income credit. Please verify the details below and confirm to record it to your ledger:\n• Amount: $amtFormatted\n• Source: ${pending.merchant}\n• Category: ${pending.category}\n• Account: ${pending.bankName}"
+                    }
+                    is VoiceIntent.AtmWithdrawal -> {
+                        addTransaction(
+                            merchant = "ATM Cash Withdrawal",
+                            amountPaise = voiceIntent.amountPaise,
+                            type = TransactionType.EXPENSE,
+                            category = "TRANSFER",
+                            bankAccountName = voiceIntent.bankName,
+                            note = "ATM Cash Withdrawal to Cash Wallet"
+                        )
+                        val amtFormatted = "₹%,.2f".format(Locale.ENGLISH, voiceIntent.amountPaise / 100.0)
+                        "✓ Recorded ATM withdrawal: $amtFormatted from ${voiceIntent.bankName} transferred to your Cash Wallet. (Handled as a transfer; not double-counted as an expense)."
+                    }
+                    is VoiceIntent.InquireBalance -> {
+                        val banks = currentState.banks
+                        if (voiceIntent.targetBank != null) {
+                            val matched = banks.find { it.bankName.contains(voiceIntent.targetBank, ignoreCase = true) }
+                                ?: banks.firstOrNull()
+                            if (matched != null) {
+                                val balFormatted = "₹%,.2f".format(Locale.ENGLISH, matched.balancePaise / 100.0)
+                                "Balance for ${matched.bankName} (${matched.maskedAccountNumber}): $balFormatted [${matched.balanceSource.name} • ${matched.lastUpdatedText}]."
+                            } else {
+                                "No matching bank account found for \"${voiceIntent.targetBank}\"."
+                            }
                         } else {
-                            "No matching bank account found for ${voiceIntent.targetBank}."
+                            val totalPaise = banks.sumOf { it.balancePaise }
+                            val totalFormatted = "₹%,.2f".format(Locale.ENGLISH, totalPaise / 100.0)
+                            if (banks.isEmpty()) {
+                                "No bank accounts are currently configured. Tap Settings ➔ Bank Accounts to add your accounts."
+                            } else {
+                                val breakdown = banks.joinToString("\n") {
+                                    val bal = "₹%,.2f".format(Locale.ENGLISH, it.balancePaise / 100.0)
+                                    "• ${it.displayName} (${it.maskedAccountNumber}): $bal [${it.balanceSource.name}]"
+                                }
+                                "Total balance across your ${banks.size} configured accounts: $totalFormatted\n$breakdown"
+                            }
                         }
-                    } else {
-                        val totalPaise = banks.sumOf { it.balancePaise }
-                        val breakdown = banks.joinToString("\n") { "• ${it.bankName} (${it.maskedAccountNumber}): ₹%,.2f [${it.balanceSource.name}]".format(Locale.ENGLISH, it.balancePaise / 100.0) }
-                        "Total balance across your %d configured accounts: ₹%,.2f\n%s"
-                            .format(Locale.ENGLISH, banks.size, totalPaise / 100.0, breakdown)
                     }
-                }
-                is VoiceIntent.InquireSpending -> {
-                    val todaySpent = currentState.todaySpentPaise
-                    val monthSpent = currentState.monthSpentPaise
-                    val dailyRem = (currentState.dailyLimitPaise - todaySpent).coerceAtLeast(0L)
-                    "Today's spending: ₹%,.2f (₹%,.2f remaining in daily safe limit).\nMonth spending: ₹%,.2f across your active accounts."
-                        .format(Locale.ENGLISH, todaySpent / 100.0, dailyRem / 100.0, monthSpent / 100.0)
-                }
-                is VoiceIntent.InquireBudget -> {
-                    val dailyRem = (currentState.dailyLimitPaise - currentState.todaySpentPaise).coerceAtLeast(0L)
-                    val monthRem = (currentState.monthlyLimitPaise - currentState.monthSpentPaise).coerceAtLeast(0L)
-                    "Daily Budget: ₹%,.2f limit (₹%,.2f remaining today).\nMonthly Ceiling: ₹%,.2f limit (₹%,.2f remaining in %s)."
-                        .format(Locale.ENGLISH, currentState.dailyLimitPaise / 100.0, dailyRem / 100.0, currentState.monthlyLimitPaise / 100.0, monthRem / 100.0, currentState.currentMonthName)
-                }
-                is VoiceIntent.QueryMerchantSpend -> {
-                    val merchant = voiceIntent.merchantName
-                    val totalPaise = if (repo != null) {
-                        repo.getMerchantTotalSpendDirect(merchant)
-                    } else {
-                        currentState.transactions
-                            .filter { it.merchant.contains(merchant as CharSequence, ignoreCase = true) && it.type == TransactionType.EXPENSE }
-                            .sumOf { it.amountPaise }
-                    }
-                    if (totalPaise > 0L) {
-                        "You have spent a total of ₹%,.2f on %s across your recorded transactions."
-                            .format(Locale.ENGLISH, totalPaise / 100.0, merchant)
-                    } else {
-                        "No recorded spending found for \"$merchant\"."
-                    }
-                }
-                is VoiceIntent.QueryTopCategory -> {
-                    val topSpend = currentState.transactions
-                        .filter { it.type == TransactionType.EXPENSE }
-                        .groupBy { it.category }
-                        .mapValues { it.value.sumOf { t -> t.amountPaise } }
-                        .maxByOrNull { it.value }
-                    if (topSpend != null && topSpend.value > 0L) {
-                        val pct = (topSpend.value.toDouble() / currentState.monthSpentPaise.coerceAtLeast(1L)) * 100.0
-                        "Your biggest expense category this month is %s with ₹%,.2f spent (%.1f%% of tracked monthly spending)."
-                            .format(Locale.ENGLISH, topSpend.key, topSpend.value / 100.0, pct)
-                    } else {
-                        "No expenses recorded for this month yet."
-                    }
-                }
-                is VoiceIntent.QueryCompareLastMonth -> {
-                    if (repo != null) {
-                        val (thisMonthDebits, lastMonthDebits) = repo.getSpendingComparison()
-                        if (lastMonthDebits > 0L) {
-                            val diffPaise = thisMonthDebits - lastMonthDebits
-                            val pct = (diffPaise.toDouble() / lastMonthDebits) * 100.0
-                            val diffText = if (diffPaise >= 0) "more" else "less"
-                            "Spending Comparison vs Last Month:\n• This Month: ₹%,.2f\n• Last Month: ₹%,.2f\n• Difference: ₹%,.2f %s (%s%.1f%%)"
-                                .format(Locale.ENGLISH, thisMonthDebits / 100.0, lastMonthDebits / 100.0, kotlin.math.abs(diffPaise) / 100.0, diffText, if (diffPaise >= 0) "+" else "", pct)
+                    is VoiceIntent.InquireSpending -> {
+                        val isMonth = voiceIntent.period == "MONTH"
+                        if (isMonth) {
+                            val monthSpent = currentState.monthSpentPaise
+                            val monthLimit = currentState.monthlyLimitPaise
+                            val monthRem = (monthLimit - monthSpent).coerceAtLeast(0L)
+                            val spentFormatted = "₹%,.2f".format(Locale.ENGLISH, monthSpent / 100.0)
+                            val remFormatted = "₹%,.2f".format(Locale.ENGLISH, monthRem / 100.0)
+                            val limitFormatted = "₹%,.2f".format(Locale.ENGLISH, monthLimit / 100.0)
+                            "Total expenses for this month: $spentFormatted across your active accounts.\nRemaining monthly budget: $remFormatted (Budget ceiling: $limitFormatted)."
                         } else {
-                            "Current month spending is ₹%,.2f. Previous month transaction history is insufficient for a historical comparison."
-                                .format(Locale.ENGLISH, thisMonthDebits / 100.0)
+                            val todaySpent = currentState.todaySpentPaise
+                            val dailyRem = (currentState.dailyLimitPaise - todaySpent).coerceAtLeast(0L)
+                            val todayFormatted = "₹%,.2f".format(Locale.ENGLISH, todaySpent / 100.0)
+                            val dailyRemFormatted = "₹%,.2f".format(Locale.ENGLISH, dailyRem / 100.0)
+                            val monthSpentFormatted = "₹%,.2f".format(Locale.ENGLISH, currentState.monthSpentPaise / 100.0)
+                            "Today's spending: $todayFormatted ($dailyRemFormatted remaining in daily safe limit).\nMonth spending: $monthSpentFormatted across your active accounts."
                         }
-                    } else {
-                        "Current month spending is ₹%,.2f. Previous month data is unavailable."
-                            .format(Locale.ENGLISH, currentState.monthSpentPaise / 100.0)
+                    }
+                    is VoiceIntent.InquireBudget -> {
+                        val dailyRem = (currentState.dailyLimitPaise - currentState.todaySpentPaise).coerceAtLeast(0L)
+                        val monthRem = (currentState.monthlyLimitPaise - currentState.monthSpentPaise).coerceAtLeast(0L)
+                        val dailyLimitFormatted = "₹%,.2f".format(Locale.ENGLISH, currentState.dailyLimitPaise / 100.0)
+                        val dailyRemFormatted = "₹%,.2f".format(Locale.ENGLISH, dailyRem / 100.0)
+                        val monthlyLimitFormatted = "₹%,.2f".format(Locale.ENGLISH, currentState.monthlyLimitPaise / 100.0)
+                        val monthRemFormatted = "₹%,.2f".format(Locale.ENGLISH, monthRem / 100.0)
+                        "Daily Budget: $dailyLimitFormatted limit ($dailyRemFormatted remaining today).\nMonthly Ceiling: $monthlyLimitFormatted limit ($monthRemFormatted remaining in ${currentState.currentMonthName})."
+                    }
+                    is VoiceIntent.QueryBiggestExpense -> {
+                        val biggest = currentState.transactions
+                            .filter { it.type == TransactionType.EXPENSE }
+                            .maxByOrNull { it.amountPaise }
+                        if (biggest != null && biggest.amountPaise > 0L) {
+                            val amtFormatted = "₹%,.2f".format(Locale.ENGLISH, biggest.amountPaise / 100.0)
+                            "Your biggest recorded expense is $amtFormatted at ${biggest.merchant} (${biggest.category}) on ${biggest.formattedDate} via ${biggest.bankAccountName}."
+                        } else {
+                            "No expenses recorded in your ledger yet."
+                        }
+                    }
+                    is VoiceIntent.QuerySavings -> {
+                        val totalIncome = currentState.transactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amountPaise }
+                        val totalExpense = currentState.transactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountPaise }
+                        val netSavings = totalIncome - totalExpense
+                        val incFormatted = "₹%,.2f".format(Locale.ENGLISH, totalIncome / 100.0)
+                        val expFormatted = "₹%,.2f".format(Locale.ENGLISH, totalExpense / 100.0)
+                        val savingsFormatted = "₹%,.2f".format(Locale.ENGLISH, kotlin.math.abs(netSavings) / 100.0)
+
+                        if (totalIncome > 0L) {
+                            if (netSavings >= 0L) {
+                                "You have saved $savingsFormatted this month!\n• Total Income: $incFormatted\n• Total Expenses: $expFormatted"
+                            } else {
+                                "Your spending exceeds recorded income by $savingsFormatted this month.\n• Total Income: $incFormatted\n• Total Expenses: $expFormatted"
+                            }
+                        } else {
+                            val monthRem = (currentState.monthlyLimitPaise - currentState.monthSpentPaise).coerceAtLeast(0L)
+                            val remFormatted = "₹%,.2f".format(Locale.ENGLISH, monthRem / 100.0)
+                            val limitFormatted = "₹%,.2f".format(Locale.ENGLISH, currentState.monthlyLimitPaise / 100.0)
+                            "No income transactions recorded yet. Based on your monthly budget of $limitFormatted, you currently have $remFormatted saved under your ceiling."
+                        }
+                    }
+                    is VoiceIntent.QueryAnalyzeHabits -> {
+                        val expenses = currentState.transactions.filter { it.type == TransactionType.EXPENSE }
+                        if (expenses.isEmpty()) {
+                            "No transactions recorded yet to analyze. Log a few expenses to generate spending habit insights."
+                        } else {
+                            val totalSpentFormatted = "₹%,.2f".format(Locale.ENGLISH, currentState.monthSpentPaise / 100.0)
+                            val topCategory = expenses
+                                .groupBy { it.category }
+                                .mapValues { it.value.sumOf { t -> t.amountPaise } }
+                                .maxByOrNull { it.value }
+
+                            val topCatText = if (topCategory != null && currentState.monthSpentPaise > 0L) {
+                                val pct = (topCategory.value * 100) / currentState.monthSpentPaise
+                                "${topCategory.key} ($pct%)"
+                            } else "None"
+
+                            val calendar = java.util.Calendar.getInstance()
+                            val dayOfMonth = calendar.get(java.util.Calendar.DAY_OF_MONTH).coerceAtLeast(1)
+                            val dailyAvgPaise = currentState.monthSpentPaise / dayOfMonth
+                            val dailyAvgFormatted = "₹%,.2f".format(Locale.ENGLISH, dailyAvgPaise / 100.0)
+
+                            "Spending Habits Analysis:\n• Tracked Month Spending: $totalSpentFormatted across ${expenses.size} expenses\n• Primary Outlay Category: $topCatText\n• Daily Burn Rate: $dailyAvgFormatted/day\n• Financial Insight: You are keeping within your planned thresholds. Maintain regular tracking for accurate category insights."
+                        }
+                    }
+                    is VoiceIntent.QueryRecentTransactions -> {
+                        val recent = currentState.transactions.take(5)
+                        if (recent.isEmpty()) {
+                            "You haven't recorded any transactions yet. Tap '+ Add' or speak into the microphone to log your first expense."
+                        } else {
+                            val items = recent.joinToString("\n") { tx ->
+                                val sign = if (tx.type == TransactionType.EXPENSE) "−" else "+"
+                                val amt = "₹%,.2f".format(Locale.ENGLISH, tx.amountPaise / 100.0)
+                                "• ${tx.merchant}: $sign$amt (${tx.category}) [${tx.formattedDate}]"
+                            }
+                            "Your latest transactions:\n$items"
+                        }
+                    }
+                    is VoiceIntent.QueryMerchantSpend -> {
+                        val merchant = voiceIntent.merchantName
+                        val totalPaise = if (repo != null) {
+                            repo.getMerchantTotalSpendDirect(merchant)
+                        } else {
+                            currentState.transactions
+                                .filter { it.merchant.contains(merchant as CharSequence, ignoreCase = true) && it.type == TransactionType.EXPENSE }
+                                .sumOf { it.amountPaise }
+                        }
+                        if (totalPaise > 0L) {
+                            val amtFormatted = "₹%,.2f".format(Locale.ENGLISH, totalPaise / 100.0)
+                            "You have spent a total of $amtFormatted on $merchant across your recorded transactions."
+                        } else {
+                            "No recorded spending found for \"$merchant\"."
+                        }
+                    }
+                    is VoiceIntent.QueryTopCategory -> {
+                        val topSpend = currentState.transactions
+                            .filter { it.type == TransactionType.EXPENSE }
+                            .groupBy { it.category }
+                            .mapValues { it.value.sumOf { t -> t.amountPaise } }
+                            .maxByOrNull { it.value }
+                        if (topSpend != null && topSpend.value > 0L) {
+                            val totalSpent = currentState.monthSpentPaise.coerceAtLeast(topSpend.value)
+                            val pct = if (totalSpent > 0L) ((topSpend.value * 100) / totalSpent).toInt() else 100
+                            val amtFormatted = "₹%,.2f".format(Locale.ENGLISH, topSpend.value / 100.0)
+                            "Your biggest expense category this month is ${topSpend.key} with $amtFormatted spent ($pct% of tracked spending)."
+                        } else {
+                            "No expenses recorded for this month yet."
+                        }
+                    }
+                    is VoiceIntent.QueryCompareLastMonth -> {
+                        if (repo != null) {
+                            val (thisMonthDebits, lastMonthDebits) = repo.getSpendingComparison()
+                            val thisFormatted = "₹%,.2f".format(Locale.ENGLISH, thisMonthDebits / 100.0)
+                            val lastFormatted = "₹%,.2f".format(Locale.ENGLISH, lastMonthDebits / 100.0)
+
+                            if (lastMonthDebits > 0L) {
+                                val diffPaise = thisMonthDebits - lastMonthDebits
+                                val diffFormatted = "₹%,.2f".format(Locale.ENGLISH, kotlin.math.abs(diffPaise) / 100.0)
+                                val pct = (kotlin.math.abs(diffPaise) * 100) / lastMonthDebits
+                                val diffText = if (diffPaise >= 0) "more" else "less"
+                                val sign = if (diffPaise >= 0) "+" else "−"
+                                "Spending Comparison vs Last Month:\n• This Month: $thisFormatted\n• Last Month: $lastFormatted\n• Difference: $diffFormatted $diffText ($sign$pct%)"
+                            } else {
+                                "Current month spending is $thisFormatted. Previous month transaction history is insufficient for a historical comparison."
+                            }
+                        } else {
+                            val monthFormatted = "₹%,.2f".format(Locale.ENGLISH, currentState.monthSpentPaise / 100.0)
+                            "Current month spending is $monthFormatted. Previous month data is unavailable."
+                        }
+                    }
+                    is VoiceIntent.QueryReduceSpending -> {
+                        val topCategories = currentState.transactions
+                            .filter { it.type == TransactionType.EXPENSE }
+                            .groupBy { it.category }
+                            .mapValues { it.value.sumOf { t -> t.amountPaise } }
+                            .entries
+                            .sortedByDescending { it.value }
+                            .take(3)
+                        if (topCategories.isNotEmpty()) {
+                            val breakdown = topCategories.joinToString("\n") {
+                                val amt = "₹%,.2f".format(Locale.ENGLISH, it.value / 100.0)
+                                "• ${it.key}: $amt"
+                            }
+                            val trimPaise = (currentState.monthSpentPaise * 15L) / 100L
+                            val trimFormatted = "₹%,.2f".format(Locale.ENGLISH, trimPaise / 100.0)
+                            val dailyCeilingPaise = (currentState.monthlyLimitPaise * 85L) / (100L * 30L)
+                            val ceilingFormatted = "₹%,.2f".format(Locale.ENGLISH, dailyCeilingPaise / 100.0)
+
+                            "Actionable plan to reduce spending next month:\n\n1. Target Top Spending Categories:\n$breakdown\n\n2. Trim non-essential discretionary spends by 15% to save $trimFormatted.\n3. Daily ceiling target: Keep daily expense under $ceilingFormatted to remain comfortably below budget."
+                        } else {
+                            "To reduce spending next month, establish category budget ceilings and activate real-time daily spending alerts."
+                        }
+                    }
+                    is VoiceIntent.AmbiguousExpense -> {
+                        "${voiceIntent.promptForMissing}\nExamples:\n• \"Add ₹250 for lunch paid through Kotak\"\n• \"I spent ₹120 on petrol using Indian Bank\"\n• \"I withdrew ₹2,000 from an ATM using KVB\""
+                    }
+                    is VoiceIntent.GeneralChat -> {
+                        val isConfigured = currentState.aiConfig.isConfigured
+                        if (!isConfigured) {
+                            "Spendo AI is operating in offline financial assistant mode. You can ask for balances, spend tracking, recent transactions, or voice expense entry anytime. Tap Settings ➔ AI Configuration to connect external LLM providers (Groq, Cerebras, Gemini, OpenAI)."
+                        } else {
+                            "Your financial status looks solid. You have maintained a ${currentState.currentStreakDays}-day spending streak under limit, and your top tracked accounts are active and balanced."
+                        }
                     }
                 }
-                is VoiceIntent.QueryReduceSpending -> {
-                    val topCategories = currentState.transactions
-                        .filter { it.type == TransactionType.EXPENSE }
-                        .groupBy { it.category }
-                        .mapValues { it.value.sumOf { t -> t.amountPaise } }
-                        .entries
-                        .sortedByDescending { it.value }
-                        .take(3)
-                    if (topCategories.isNotEmpty()) {
-                        val breakdown = topCategories.joinToString("\n") { "• ${it.key}: ₹%,.2f".format(Locale.ENGLISH, it.value / 100.0) }
-                        "Actionable plan to reduce spending next month:\n\n1. Target Top Spending Categories:\n$breakdown\n\n2. Trim non-essential discretionary spends by 15% to save ₹%,.2f.\n3. Daily ceiling target: Keep daily expense under ₹%,.2f to remain comfortably below budget."
-                            .format(Locale.ENGLISH, (currentState.monthSpentPaise * 0.15) / 100.0, (currentState.monthlyLimitPaise * 0.85 / 30.0) / 100.0)
-                    } else {
-                        "To reduce spending next month, establish category budget ceilings and activate real-time daily spending alerts."
-                    }
-                }
-                is VoiceIntent.AmbiguousExpense -> {
-                    "${voiceIntent.promptForMissing}\nExamples:\n• \"Add ₹250 for lunch paid through Kotak\"\n• \"I spent ₹120 on petrol using Indian Bank\"\n• \"I withdrew ₹2,000 from an ATM using KVB\""
-                }
-                is VoiceIntent.GeneralChat -> {
-                    val isConfigured = currentState.aiConfig.isConfigured
-                    if (!isConfigured) {
-                        "Spendo AI is currently operating in offline financial assistant mode. You can ask for balances, spend tracking, or voice expense creation anytime. Tap 'Configure AI' to connect external LLM providers (Groq, Cerebras, Gemini, OpenAI)."
-                    } else {
-                        "Your financial status looks solid. You have maintained a ${currentState.currentStreakDays}-day spending streak under limit, and your top tracked accounts are active and balanced."
-                    }
-                }
+            } catch (e: Exception) {
+                "Unable to process query: ${e.message ?: "An unexpected error occurred. Please try again."}"
             }
 
             val spendoReply = SpendoChatMessage(
-                id = "msg_${System.currentTimeMillis() + 1}",
+                id = "msg_spendo_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}",
                 sender = "SPENDO",
                 text = responseText,
                 pendingExpense = pendingConfirmation
@@ -839,24 +1071,53 @@ class SpendoViewModel(
         val repo = repository
         if (repo != null) {
             viewModelScope.launch {
-                repo.saveAiConfigMetadata(
+                repo.saveSecureAiConfig(
                     providerId = currentConfig.provider.name,
-                    displayName = currentConfig.provider.displayName,
-                    selectedModel = currentConfig.model,
-                    isConfigured = true,
-                    lastTestMessage = currentConfig.testConnectionMessage ?: "Configured"
+                    model = currentConfig.model,
+                    apiKey = currentConfig.apiKey,
+                    lastTestMessage = currentConfig.testConnectionMessage ?: "Configured & Active"
                 )
             }
         }
 
+        val configMsgId = "msg_config_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}"
         _uiState.update {
             it.copy(
                 aiConfig = it.aiConfig.copy(isConfigured = true),
                 chatMessages = it.chatMessages + SpendoChatMessage(
-                    id = "msg_config_done",
+                    id = configMsgId,
                     sender = "SPENDO",
                     text = "AI Provider configured successfully (${it.aiConfig.provider.displayName} • ${it.aiConfig.model}). Spendo AI agent is now active and ready for your financial queries."
                 )
+            )
+        }
+    }
+
+    fun deleteAiConfiguration() {
+        val currentConfig = _uiState.value.aiConfig
+        val repo = repository
+        if (repo != null) {
+            viewModelScope.launch {
+                repo.deleteSecureAiConfig(currentConfig.provider.name)
+            }
+        }
+        _uiState.update {
+            it.copy(
+                aiConfig = AiConfigState(
+                    isConfigured = false,
+                    provider = currentConfig.provider,
+                    model = currentConfig.provider.defaultModel,
+                    apiKey = ""
+                )
+            )
+        }
+    }
+
+    fun clearChatMessages() {
+        _uiState.update {
+            it.copy(
+                chatMessages = emptyList(),
+                chatInputText = ""
             )
         }
     }
@@ -893,22 +1154,86 @@ class SpendoViewModel(
     }
 
     // -------------------------------------------------------------
-    // CSV Import Actions
+    // Transaction Update & CSV Actions
     // -------------------------------------------------------------
-    fun importCsv(inputStream: java.io.InputStream, onComplete: (Int) -> Unit) {
+    fun updateTransaction(updatedTx: SpendoTransaction) {
         val repo = repository
-        viewModelScope.launch {
-            val count = if (repo != null) {
+        val direction = if (updatedTx.type == TransactionType.INCOME) "CREDIT" else "DEBIT"
+        val entity = TransactionEntity(
+            id = updatedTx.id,
+            amountPaise = updatedTx.amountPaise,
+            currencyCode = "INR",
+            direction = direction,
+            merchant = updatedTx.merchant,
+            note = updatedTx.note,
+            categoryId = updatedTx.category,
+            occurredAtEpochMillis = updatedTx.occurredAtEpochMs,
+            sourceType = if (updatedTx.source == TransactionSource.NOTIFICATION) "NOTIFICATION" else "MANUAL",
+            reviewStatus = updatedTx.reviewStatus,
+            bankAccountName = updatedTx.bankAccountName,
+            bankAccountId = updatedTx.bankAccountId,
+            updatedAtEpochMillis = System.currentTimeMillis()
+        )
+
+        _uiState.update { state ->
+            val newTransactions = state.transactions.map {
+                if (it.id == updatedTx.id) updatedTx else it
+            }
+            state.copy(transactions = newTransactions)
+        }
+
+        if (repo != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                repo.updateTransaction(entity)
+            }
+        }
+    }
+
+    fun importCsv(inputStream: java.io.InputStream, onComplete: (CsvImportResult) -> Unit) {
+        val repo = repository
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = if (repo != null) {
                 repo.importTransactionsFromCsv(inputStream)
             } else {
-                val entities = com.spendwise.android.util.CsvImporter.parseCsv(inputStream)
+                val (entities, rejected) = com.spendwise.android.util.CsvImporter.parseCsvDetailed(inputStream)
                 val newTxs = entities.map { it.toSpendoTransaction() }
                 _uiState.update { state ->
-                    state.copy(transactions = (newTxs + state.transactions).distinctBy { it.id })
+                    val existingMap = state.transactions.associateBy { it.id }
+                    val merged = (newTxs.filter { !existingMap.containsKey(it.id) } + state.transactions)
+                    state.copy(transactions = merged)
                 }
-                entities.size
+                CsvImportResult(
+                    importedCount = newTxs.size,
+                    skippedCount = 0,
+                    rejectedCount = rejected,
+                    totalProcessed = newTxs.size + rejected
+                )
             }
-            onComplete(count)
+            withContext(Dispatchers.Main) {
+                onComplete(result)
+            }
+        }
+    }
+
+    fun exportCsv(outputStream: java.io.OutputStream, onComplete: (Result<Int>) -> Unit) {
+        val repo = repository
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val count = if (repo != null) {
+                    repo.exportTransactionsToCsv(outputStream)
+                } else {
+                    val txs = _uiState.value.transactions
+                    com.spendwise.android.util.CsvExporter.writeSpendoTransactionsToStream(txs, outputStream)
+                    txs.size
+                }
+                withContext(Dispatchers.Main) {
+                    onComplete(Result.success(count))
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onComplete(Result.failure(e))
+                }
+            }
         }
     }
 }

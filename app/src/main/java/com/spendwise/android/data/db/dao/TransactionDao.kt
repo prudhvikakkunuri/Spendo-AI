@@ -31,6 +31,12 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getTransactionByIdDirect(id: String): TransactionEntity?
 
+    @Query("SELECT id FROM transactions")
+    suspend fun getAllTransactionIds(): List<String>
+
+    @Query("SELECT * FROM transactions WHERE reviewStatus = 'CONFIRMED' ORDER BY occurredAtEpochMillis DESC")
+    suspend fun getConfirmedTransactionsDirect(): List<TransactionEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: TransactionEntity)
 

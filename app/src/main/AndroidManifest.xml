@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".SpendWiseApplication"
@@ -22,6 +24,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Lightweight floating dialog activity for widget voice & manual expense entry -->
+        <activity
+            android:name=".widget.QuickExpenseActivity"
+            android:exported="true"
+            android:theme="@style/Theme.SpendWise.Dialog"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:noHistory="true"
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- NotificationListenerService for automatic expense detection from user-selected apps -->
         <service
@@ -47,6 +59,21 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/spendo_widget_info" />
+        </receiver>
+
+        <!-- Morning and Evening Expense Reminder Alarm Receiver -->
+        <receiver
+            android:name=".notification.SpendoReminderReceiver"
+            android:exported="false" />
+
+        <!-- Boot and Package Update Receiver to re-arm reminder alarms -->
+        <receiver
+            android:name=".notification.SpendoBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
         </receiver>
     </application>
 

@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,6 +45,10 @@ import com.spendwise.android.ui.spendo.components.SpendoEmptyState
 import com.spendwise.android.ui.spendo.model.SpendoUiState
 import com.spendwise.android.ui.spendo.model.TransactionType
 import com.spendwise.android.ui.spendo.theme.SpendoColor
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SpendoCalendarScreen(
@@ -52,29 +57,114 @@ fun SpendoCalendarScreen(
     onNavigateToTransactionDetail: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var monthOffset by remember { mutableStateOf(0) }
-    val displayMonth = when (monthOffset) {
-        -1 -> "September 2026"
-        1 -> "November 2026"
-        else -> "October 2026"
+    val deviceNow = remember { Calendar.getInstance() }
+    var selectedYear by remember { mutableIntStateOf(deviceNow.get(Calendar.YEAR)) }
+    var selectedMonth by remember { mutableIntStateOf(deviceNow.get(Calendar.MONTH)) } // 0-based
+    var selectedDay by remember { mutableIntStateOf(deviceNow.get(Calendar.DAY_OF_MONTH)) }
+
+    val monthCal = remember(selectedYear, selectedMonth) {
+        Calendar.getInstance().apply {
+            clear()
+            set(selectedYear, selectedMonth, 1, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+    }
+    val startOfMonthEpochMs = monthCal.timeInMillis
+    val daysInMonth = monthCal.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+    // Ensure selectedDay does not exceed maximum days in month
+    if (selectedDay > daysInMonth) {
+        selectedDay = daysInMonth
     }
 
-    // Days with transactions mock map
-    val daysWithSpend = setOf(3, 7, 12, 16, 18, 22, 24)
-    val todayDate = 24
+    val nextMonthCal = remember(selectedYear, selectedMonth) {
+        Calendar.getInstance().apply {
+            clear()
+            if (selectedMonth == 11) {
+                set(selectedYear + 1, 0, 1, 0, 0, 0)
+            } else {
+                set(selectedYear, selectedMonth + 1, 1, 0, 0, 0)
+            }
+            set(Calendar.MILLISECOND, 0)
+        }
+    }
+    val endOfMonthEpochMs = nextMonthCal.timeInMillis
 
-    val dayTransactions = uiState.transactions.filter {
-        // Mock matching: for day 24 return today's items, day 22 return past items
-        when (uiState.selectedCalendarDay) {
-            24 -> it.id in listOf("tx_1", "tx_2", "tx_3")
-            22 -> it.id in listOf("tx_4", "tx_5")
-            else -> it.id == "tx_6"
+    // First day of week (Monday = 0, Sunday = 6)
+    val firstDayOfWeek = monthCal.get(Calendar.DAY_OF_WEEK)
+    val startingEmptyDays = when (firstDayOfWeek) {
+        Calendar.MONDAY -> 0
+        Calendar.TUESDAY -> 1
+        Calendar.WEDNESDAY -> 2
+        Calendar.THURSDAY -> 3
+        Calendar.FRIDAY -> 4
+        Calendar.SATURDAY -> 5
+        Calendar.SUNDAY -> 6
+        else -> 0
+    }
+
+    val monthYearFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
+    val displayMonth = monthYearFormat.format(monthCal.time).uppercase(Locale.getDefault())
+
+    val navigatePrevMonth = {
+        if (selectedMonth == 0) {
+            selectedMonth = 11
+            selectedYear -= 1
+        } else {
+            selectedMonth -= 1
+        }
+        selectedDay = 1
+        onSelectDay(1)
+    }
+
+    val navigateNextMonth = {
+        if (selectedMonth == 11) {
+            selectedMonth = 0
+            selectedYear += 1
+        } else {
+            selectedMonth += 1
+        }
+        selectedDay = 1
+        onSelectDay(1)
+    }
+
+    // Filter transactions occurring strictly within this month
+    val monthTransactions = remember(uiState.transactions, startOfMonthEpochMs, endOfMonthEpochMs) {
+        uiState.transactions.filter {
+            it.occurredAtEpochMs in startOfMonthEpochMs until endOfMonthEpochMs
+        }
+    }
+
+    // Days with activity within this month
+    val daysWithSpend = remember(monthTransactions, selectedYear, selectedMonth) {
+        val cal = Calendar.getInstance()
+        val set = mutableSetOf<Int>()
+        for (tx in monthTransactions) {
+            cal.timeInMillis = tx.occurredAtEpochMs
+            if (cal.get(Calendar.YEAR) == selectedYear && cal.get(Calendar.MONTH) == selectedMonth) {
+                set.add(cal.get(Calendar.DAY_OF_MONTH))
+            }
+        }
+        set
+    }
+
+    // Selected day transactions
+    val dayTransactions = remember(monthTransactions, selectedDay, selectedYear, selectedMonth) {
+        val cal = Calendar.getInstance()
+        monthTransactions.filter {
+            cal.timeInMillis = it.occurredAtEpochMs
+            cal.get(Calendar.YEAR) == selectedYear &&
+            cal.get(Calendar.MONTH) == selectedMonth &&
+            cal.get(Calendar.DAY_OF_MONTH) == selectedDay
         }
     }
 
     val selectedDayTotalPaise = dayTransactions
         .filter { it.type == TransactionType.EXPENSE }
         .sumOf { it.amountPaise }
+
+    val totalCells = startingEmptyDays + daysInMonth
+    val totalWeeks = (totalCells + 6) / 7
 
     LazyColumn(
         modifier = modifier
@@ -107,7 +197,7 @@ fun SpendoCalendarScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
-                            onClick = { if (monthOffset > -1) monthOffset-- },
+                            onClick = navigatePrevMonth,
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
@@ -118,7 +208,7 @@ fun SpendoCalendarScreen(
                         }
 
                         Text(
-                            text = displayMonth.uppercase(),
+                            text = displayMonth,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
@@ -127,7 +217,7 @@ fun SpendoCalendarScreen(
                         )
 
                         IconButton(
-                            onClick = { if (monthOffset < 1) monthOffset++ },
+                            onClick = navigateNextMonth,
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
@@ -156,13 +246,9 @@ fun SpendoCalendarScreen(
                         }
                     }
 
-                    // Calendar Days Grid (5 weeks of October 2026)
-                    val daysInMonth = 31
-                    val startingEmptyDays = 3 // Thu 1st Oct
-                    val totalCells = 35
-
+                    // Dynamic Calendar Days Grid
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (week in 0 until 5) {
+                        for (week in 0 until totalWeeks) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceAround
@@ -178,8 +264,10 @@ fun SpendoCalendarScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         if (dayNum in 1..daysInMonth) {
-                                            val isSelected = uiState.selectedCalendarDay == dayNum
-                                            val isToday = dayNum == todayDate
+                                            val isSelected = selectedDay == dayNum
+                                            val isRealToday = (selectedYear == deviceNow.get(Calendar.YEAR) &&
+                                                    selectedMonth == deviceNow.get(Calendar.MONTH) &&
+                                                    dayNum == deviceNow.get(Calendar.DAY_OF_MONTH))
                                             val hasSpend = daysWithSpend.contains(dayNum)
 
                                             Column(
@@ -189,24 +277,27 @@ fun SpendoCalendarScreen(
                                                     .background(
                                                         when {
                                                             isSelected -> SpendoColor.TextPrimary
-                                                            isToday -> SpendoColor.SurfaceVariant
+                                                            isRealToday -> SpendoColor.SurfaceVariant
                                                             else -> androidx.compose.ui.graphics.Color.Transparent
                                                         }
                                                     )
-                                                    .clickable { onSelectDay(dayNum) },
+                                                    .clickable {
+                                                        selectedDay = dayNum
+                                                        onSelectDay(dayNum)
+                                                    },
                                                 horizontalAlignment = Alignment.CenterHorizontally,
                                                 verticalArrangement = Arrangement.Center
                                             ) {
                                                 Text(
                                                     text = dayNum.toString(),
                                                     fontSize = 13.sp,
-                                                    fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    fontWeight = if (isRealToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                                                     color = if (isSelected) SpendoColor.Background else SpendoColor.TextPrimary
                                                 )
                                                 if (hasSpend && !isSelected) {
                                                     Box(
                                                         modifier = Modifier
-                                                            .size(3.dp)
+                                                            .size(4.dp)
                                                             .clip(CircleShape)
                                                             .background(SpendoColor.AccentRed)
                                                     )
@@ -231,7 +322,7 @@ fun SpendoCalendarScreen(
             ) {
                 Column {
                     DotMatrixText(
-                        text = "${uiState.selectedCalendarDay} OCTOBER 2026",
+                        text = "$selectedDay $displayMonth",
                         fontSize = 11.sp,
                         color = SpendoColor.TextSecondary
                     )
@@ -244,7 +335,7 @@ fun SpendoCalendarScreen(
                 }
 
                 Text(
-                    text = "Total: ₹%,.2f".format(selectedDayTotalPaise / 100.0),
+                    text = "Total: ₹%,.2f".format(Locale.ENGLISH, selectedDayTotalPaise / 100.0),
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp,
@@ -258,7 +349,7 @@ fun SpendoCalendarScreen(
             item {
                 SpendoEmptyState(
                     title = "No Expenses Logged",
-                    message = "No financial activity was recorded on this day."
+                    message = "No financial activity was recorded on $selectedDay ${monthYearFormat.format(monthCal.time)}."
                 )
             }
         } else {

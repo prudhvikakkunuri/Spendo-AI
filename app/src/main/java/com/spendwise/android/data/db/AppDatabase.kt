@@ -227,10 +227,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration from version 4 to 5: adds accountNickname and notes to bank_accounts table.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `bank_accounts` ADD COLUMN `accountNickname` TEXT")
+                db.execSQL("ALTER TABLE `bank_accounts` ADD COLUMN `notes` TEXT")
+            }
+        }
+
         val MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
-            MIGRATION_3_4
+            MIGRATION_3_4,
+            MIGRATION_4_5
         )
 
         fun getInstance(context: Context): AppDatabase {

@@ -669,6 +669,11 @@ class SpendoFinancialAuditUnitTest {
         override suspend fun getTransactionByIdDirect(id: String): TransactionEntity? =
             transactions.firstOrNull { it.id == id }
 
+        override suspend fun getAllTransactionIds(): List<String> = transactions.map { it.id }
+
+        override suspend fun getConfirmedTransactionsDirect(): List<TransactionEntity> =
+            transactions.filter { it.reviewStatus == "CONFIRMED" }
+
         override suspend fun insertTransaction(transaction: TransactionEntity) {
             transactions.removeAll { it.id == transaction.id }
             transactions.add(transaction)
@@ -785,9 +790,12 @@ class SpendoFinancialAuditUnitTest {
         val accounts = mutableListOf<BankAccountEntity>()
 
         override fun getAllBankAccounts(): Flow<List<BankAccountEntity>> = flowOf(accounts)
+        override suspend fun getAllBankAccountsDirect(): List<BankAccountEntity> = accounts.toList()
         override fun getBankAccountById(id: String): Flow<BankAccountEntity?> = flowOf(accounts.firstOrNull { it.id == id })
         override suspend fun getBankAccountByIdDirect(id: String): BankAccountEntity? = accounts.firstOrNull { it.id == id }
         override suspend fun getBankAccountByNameDirect(bankName: String): BankAccountEntity? = accounts.firstOrNull { it.bankName.equals(bankName, ignoreCase = true) }
+        override suspend fun getBankAccountsByNameDirectList(bankName: String): List<BankAccountEntity> = accounts.filter { it.bankName.equals(bankName, ignoreCase = true) }
+        override suspend fun getBankAccountByNameAndNumberDirect(bankName: String, maskedNumber: String): BankAccountEntity? = accounts.firstOrNull { it.bankName.equals(bankName, ignoreCase = true) && it.maskedAccountNumber == maskedNumber }
         override suspend fun getBankAccountCount(): Int = accounts.size
 
         override suspend fun insertBankAccount(account: BankAccountEntity) {

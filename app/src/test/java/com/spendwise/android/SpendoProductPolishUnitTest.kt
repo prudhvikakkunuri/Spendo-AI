@@ -276,5 +276,237 @@ class SpendoProductPolishUnitTest {
         assertEquals(false, managerAfterRestart.verifyPassword("4892"))
         assertTrue(managerAfterRestart.verifyPassword("MySecureWallet#123"))
     }
+
+    // -------------------------------------------------------------
+    // Area 1 & 2: CSV Export & Import Tests
+    // -------------------------------------------------------------
+    @Test
+    fun testCsv13ColumnExportAndImportRoundTrip() {
+        val originalTxs = listOf(
+            SpendoTransaction(
+                id = "tx_exp_001",
+                merchant = "Blue Tokai Coffee, Roasters",
+                amountPaise = 34000L,
+                type = TransactionType.EXPENSE,
+                category = "Food & Drink",
+                occurredAtEpochMs = 1730000000000L,
+                bankAccountName = "HDFC Bank",
+                source = TransactionSource.MANUAL,
+                note = "Cappuccino & croissant, morning"
+            ),
+            SpendoTransaction(
+                id = "tx_exp_002",
+                merchant = "Consulting Client",
+                amountPaise = 5000000L,
+                type = TransactionType.INCOME,
+                category = "Salary",
+                occurredAtEpochMs = 1730050000000L,
+                bankAccountName = "Kotak Mahindra Bank",
+                source = TransactionSource.MANUAL,
+                note = "Advance invoice #104"
+            )
+        )
+
+        // 1. Export to full 13-column CSV string
+        val csvOut = com.spendwise.android.util.CsvExporter.generateFullCsvFromSpendoTransactions(originalTxs)
+        val lines = csvOut.trim().split("\n")
+        assertEquals(3, lines.size) // Header + 2 rows
+        assertEquals(com.spendwise.android.util.CsvExporter.CSV_HEADER_FULL, lines[0].trim())
+
+        // Check comma escaping for merchant and note
+        assertTrue(lines[1].contains("\"Blue Tokai Coffee, Roasters\""))
+        assertTrue(lines[1].contains("\"Cappuccino & croissant, morning\""))
+        assertTrue(lines[1].contains("340.00"))
+
+        // 2. Import back using CsvImporter
+        val inStream = java.io.ByteArrayInputStream(csvOut.toByteArray(Charsets.UTF_8))
+        val (parsedEntities, rejectedCount) = com.spendwise.android.util.CsvImporter.parseCsvDetailed(inStream)
+        assertEquals(0, rejectedCount)
+        assertEquals(2, parsedEntities.size)
+
+        val first = parsedEntities[0]
+        assertEquals("tx_exp_001", first.id)
+        assertEquals("Blue Tokai Coffee, Roasters", first.merchant)
+        assertEquals(34000L, first.amountPaise)
+        assertEquals("DEBIT", first.direction)
+
+        val second = parsedEntities[1]
+        assertEquals("tx_exp_002", second.id)
+        assertEquals(5000000L, second.amountPaise)
+        assertEquals("CREDIT", second.direction)
+    }
+
+    @Test
+    fun testCsvImportHandlesMalformedRowsWithoutCrashing() {
+        val malformedCsv = """
+            transaction_id,date,time,description,merchant,amount,transaction_type,category,payment_method,bank_account,account_last4,debit_credit,notes
+            tx_good_1,2026-10-24,10:00:00,Good meal,Cafe,150.00,expense,Food & Drink,UPI,Kotak,1920,DEBIT,note
+            tx_bad_amt,2026-10-24,11:00:00,Bad amount,Cafe,-50.00,expense,Food & Drink,UPI,Kotak,1920,DEBIT,note
+            tx_bad_date,not-a-date,12:00:00,No date,Cafe,200.00,expense,Food & Drink,UPI,Kotak,1920,DEBIT,note
+            tx_good_2,2026-10-24,13:00:00,Good ride,Uber,280.00,expense,Transit,UPI,HDFC,4892,DEBIT,ride
+        """.trimIndent()
+
+        val inStream = java.io.ByteArrayInputStream(malformedCsv.toByteArray(Charsets.UTF_8))
+        val (parsed, rejected) = com.spendwise.android.util.CsvImporter.parseCsvDetailed(inStream)
+
+        assertEquals(2, parsed.size)
+        assertEquals("tx_good_1", parsed[0].id)
+        assertEquals("tx_good_2", parsed[1].id)
+        assertTrue("Expected rejected rows for invalid amount and invalid date", rejected >= 1)
+    }
+
+    @Test
+    fun testCsvExportEmptyListProducesValidHeader() {
+        val csv = com.spendwise.android.util.CsvExporter.generateFullCsvFromSpendoTransactions(emptyList())
+        val lines = csv.trim().split("\n")
+        assertEquals(1, lines.size)
+        assertEquals(com.spendwise.android.util.CsvExporter.CSV_HEADER_FULL, lines[0].trim())
+    }
+
+    // -------------------------------------------------------------
+    // Area 3: Voice Input Natural Language Tests (No Hardcoded Fallback)
+    // -------------------------------------------------------------
+    @Test
+    fun testVoiceInputNaturalLanguageExpensePhrasing() {
+        // Natural speech 1: "I spent 250 rupees on lunch through Kotak today."
+        val intent1 = VoiceFinancialParser.parseSpeech("I spent 250 rupees on lunch through Kotak today.")
+        assertTrue(intent1 is VoiceIntent.AddExpense)
+        val exp1 = intent1 as VoiceIntent.AddExpense
+        assertEquals(25000L, exp1.amountPaise)
+        assertEquals("Lunch", exp1.merchant)
+        assertEquals("Food & Drink", exp1.category)
+        assertEquals("Kotak Mahindra Bank", exp1.bankName)
+
+        // Natural speech 2: "Paid 500 for petrol yesterday using HDFC."
+        val intent2 = VoiceFinancialParser.parseSpeech("Paid 500 for petrol yesterday using HDFC.")
+        assertTrue(intent2 is VoiceIntent.AddExpense)
+        val exp2 = intent2 as VoiceIntent.AddExpense
+        assertEquals(50000L, exp2.amountPaise)
+        assertEquals("Petrol", exp2.merchant)
+        assertEquals("Transit", exp2.category)
+        assertEquals("HDFC Bank", exp2.bankName)
+    }
+
+    @Test
+    fun testVoiceInputIncomeParsing() {
+        // "Received 1500 rupees from freelancing."
+        val intent = VoiceFinancialParser.parseSpeech("Received 1500 rupees from freelancing.")
+        assertTrue(intent is VoiceIntent.AddIncome)
+        val inc = intent as VoiceIntent.AddIncome
+        assertEquals(150000L, inc.amountPaise)
+        assertEquals("Freelancing", inc.source)
+        assertEquals("Freelance", inc.category)
+    }
+
+    @Test
+    fun testVoiceInputUnrecognizedSpeechDoesNotFabricateTransaction() {
+        val intent = VoiceFinancialParser.parseSpeech("Hello what is the weather today?")
+        assertTrue(intent is VoiceIntent.GeneralChat)
+        assertTrue(intent !is VoiceIntent.AddExpense)
+        assertTrue(intent !is VoiceIntent.AddIncome)
+    }
+
+    // -------------------------------------------------------------
+    // Area 4: Manual Expense Editing
+    // -------------------------------------------------------------
+    @Test
+    fun testManualExpenseEditingUpdatesRecordWithoutDuplication() {
+        val viewModel = SpendoViewModel()
+        val originalTx = viewModel.uiState.value.transactions.first()
+        val originalId = originalTx.id
+        val originalSize = viewModel.uiState.value.transactions.size
+
+        // Edit transaction with modified amount, merchant, and category
+        val updatedTx = originalTx.copy(
+            amountPaise = 77700L, // ₹777.00
+            merchant = "Updated Test Merchant",
+            category = "Shopping",
+            note = "Edited by user"
+        )
+
+        viewModel.updateTransaction(updatedTx)
+
+        val newTransactions = viewModel.uiState.value.transactions
+        assertEquals("Transaction count must remain unchanged after edit (no duplication)", originalSize, newTransactions.size)
+
+        val retrieved = newTransactions.find { it.id == originalId }
+        assertNotNull(retrieved)
+        assertEquals(77700L, retrieved!!.amountPaise)
+        assertEquals("Updated Test Merchant", retrieved.merchant)
+        assertEquals("Shopping", retrieved.category)
+        assertEquals("Edited by user", retrieved.note)
+    }
+
+    // -------------------------------------------------------------
+    // Area 5: Calendar Month Boundary & Date Filtering Calculations
+    // -------------------------------------------------------------
+    @Test
+    fun testCalendarMonthBoundaryCalculationsAcrossYearEnd() {
+        val cal = java.util.Calendar.getInstance()
+
+        // 1. December 2025: 31 days
+        cal.clear()
+        cal.set(2025, java.util.Calendar.DECEMBER, 1, 0, 0, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val decStart = cal.timeInMillis
+        val decDays = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+        assertEquals(31, decDays)
+
+        // 2. January 2026: 31 days
+        cal.clear()
+        cal.set(2026, java.util.Calendar.JANUARY, 1, 0, 0, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val janStart = cal.timeInMillis
+        val janDays = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+        assertEquals(31, janDays)
+
+        // Boundary invariant: January starts strictly after December
+        assertTrue(janStart > decStart)
+
+        // 3. Transactions filtering: December transaction must not appear in January
+        val decTxEpoch = decStart + (15L * 86400000L) // Dec 16th
+        val janTxEpoch = janStart + (10L * 86400000L) // Jan 11th
+
+        val isDecInJan = decTxEpoch in janStart until (janStart + (31L * 86400000L))
+        val isJanInJan = janTxEpoch in janStart until (janStart + (31L * 86400000L))
+
+        assertEquals(false, isDecInJan)
+        assertEquals(true, isJanInJan)
+    }
+
+    // -------------------------------------------------------------
+    // Area 6 & 7: Secure Keystore API Key Encryption & Persistence
+    // -------------------------------------------------------------
+    @Test
+    fun testSecureKeyStorageEncryptionPersistenceAndRetrieval() = kotlinx.coroutines.runBlocking {
+        val fakeStorage = object : com.spendwise.android.domain.security.SpendoSecurityStorage {
+            val map = mutableMapOf<String, String>()
+            override suspend fun getPreferenceDirect(key: String): String? = map[key]
+            override suspend fun setPreference(key: String, value: String) { map[key] = value }
+        }
+
+        val keyStorage = com.spendwise.android.domain.security.SpendoSecureKeyStorage(fakeStorage)
+
+        val rawApiKey = "gsk_live_secret_489291820491820491820"
+
+        // 1. Save API key
+        keyStorage.saveApiKey("GROQ", rawApiKey)
+
+        // 2. Verify it is NEVER stored in plaintext in storage
+        val storedRaw = fakeStorage.map["enc_api_key_groq"]
+        assertNotNull(storedRaw)
+        assertTrue("Stored payload must not contain raw API key in plaintext", !storedRaw!!.contains(rawApiKey))
+        assertTrue("Stored payload must be formatted as IV:Ciphertext", storedRaw.contains(":"))
+
+        // 3. Retrieve and decrypt API key
+        val decrypted = keyStorage.getApiKey("GROQ")
+        assertEquals(rawApiKey, decrypted)
+
+        // 4. Delete API key
+        keyStorage.deleteApiKey("GROQ")
+        val afterDelete = keyStorage.getApiKey("GROQ")
+        assertNull(afterDelete)
+    }
 }
+
 

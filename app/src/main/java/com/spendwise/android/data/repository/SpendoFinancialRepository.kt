@@ -1,6 +1,8 @@
 package com.spendwise.android.data.repository
 
 import com.spendwise.android.data.db.AppDatabase
+import androidx.room.withTransaction
+import com.spendwise.android.domain.security.SpendoSecureKeyStorage
 import com.spendwise.android.data.db.entity.AiProviderConfigEntity
 import com.spendwise.android.data.db.entity.AppPreferenceEntity
 import com.spendwise.android.data.db.entity.BankAccountEntity
@@ -48,12 +50,20 @@ class SpendoFinancialRepository(
     private val notificationRecordDao = database.notificationRecordDao()
     private val appPreferenceDao = database.appPreferenceDao()
     private val aiProviderConfigDao = database.aiProviderConfigDao()
+    val secureKeyStorage = SpendoSecureKeyStorage(this)
 
     init {
         // Seed default foundational data if empty
         coroutineScope.launch {
             seedDefaultsIfEmpty()
         }
+    }
+
+    private fun notifyWidgetUpdate() {
+        try {
+            val ctx = com.spendwise.android.SpendWiseApplication.instance
+            com.spendwise.android.widget.SpendoWidgetProvider.updateAllWidgets(ctx)
+        } catch (_: Exception) {}
     }
 
     // -------------------------------------------------------------
@@ -125,7 +135,8 @@ class SpendoFinancialRepository(
         category: String,
         bankAccountName: String,
         note: String?,
-        occurredAtEpochMs: Long = System.currentTimeMillis()
+        occurredAtEpochMs: Long = System.currentTimeMillis(),
+        bankAccountId: String? = null
     ): String {
         require(amountPaise > 0) { "Expense amount must be strictly positive integer paise" }
         val id = "tx_${UUID.randomUUID()}"
@@ -142,12 +153,14 @@ class SpendoFinancialRepository(
             reviewStatus = "CONFIRMED",
             createdAtEpochMillis = System.currentTimeMillis(),
             updatedAtEpochMillis = System.currentTimeMillis(),
-            bankAccountName = bankAccountName
+            bankAccountName = bankAccountName,
+            bankAccountId = bankAccountId
         )
         transactionDao.insertTransaction(entity)
 
         // Adjust bank account balance (debit deducts)
-        adjustBankBalanceByName(bankAccountName, -amountPaise)
+        adjustBankBalance(bankAccountId, bankAccountName, -amountPaise)
+        notifyWidgetUpdate()
         return id
     }
 
@@ -157,7 +170,8 @@ class SpendoFinancialRepository(
         category: String,
         bankAccountName: String,
         note: String?,
-        occurredAtEpochMs: Long = System.currentTimeMillis()
+        occurredAtEpochMs: Long = System.currentTimeMillis(),
+        bankAccountId: String? = null
     ): String {
         require(amountPaise > 0) { "Income amount must be strictly positive integer paise" }
         val id = "tx_${UUID.randomUUID()}"
@@ -174,12 +188,14 @@ class SpendoFinancialRepository(
             reviewStatus = "CONFIRMED",
             createdAtEpochMillis = System.currentTimeMillis(),
             updatedAtEpochMillis = System.currentTimeMillis(),
-            bankAccountName = bankAccountName
+            bankAccountName = bankAccountName,
+            bankAccountId = bankAccountId
         )
         transactionDao.insertTransaction(entity)
 
         // Adjust bank account balance (credit adds)
-        adjustBankBalanceByName(bankAccountName, amountPaise)
+        adjustBankBalance(bankAccountId, bankAccountName, amountPaise)
+        notifyWidgetUpdate()
         return id
     }
 
@@ -191,25 +207,21 @@ class SpendoFinancialRepository(
         category: String,
         bankAccountName: String,
         note: String?,
-        occurredAtEpochMs: Long
+        occurredAtEpochMs: Long,
+        bankAccountId: String? = null
     ) {
         require(amountPaise > 0) { "Updated amount must be strictly positive integer paise" }
         val existing = transactionDao.getTransactionByIdDirect(id) ?: return
         val direction = if (type == TransactionType.EXPENSE) "DEBIT" else "CREDIT"
 
         // 1. Reverse previous balance impact
-        existing.bankAccountName?.let { oldBank ->
-            if (oldBank.isNotBlank()) {
-                val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
-                adjustBankBalanceByName(oldBank, reverseDelta)
-            }
-        }
+        val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
+        adjustBankBalance(existing.bankAccountId, existing.bankAccountName, reverseDelta)
 
         // 2. Apply new balance impact
-        if (bankAccountName.isNotBlank()) {
-            val applyDelta = if (direction == "DEBIT") -amountPaise else amountPaise
-            adjustBankBalanceByName(bankAccountName, applyDelta)
-        }
+        val applyDelta = if (direction == "DEBIT") -amountPaise else amountPaise
+        val targetBankId = bankAccountId ?: existing.bankAccountId
+        adjustBankBalance(targetBankId, bankAccountName, applyDelta)
 
         val updated = existing.copy(
             merchant = merchant,
@@ -217,11 +229,13 @@ class SpendoFinancialRepository(
             direction = direction,
             categoryId = category,
             bankAccountName = bankAccountName,
+            bankAccountId = targetBankId,
             note = note,
             occurredAtEpochMillis = occurredAtEpochMs,
             updatedAtEpochMillis = System.currentTimeMillis()
         )
         transactionDao.updateTransaction(updated)
+        notifyWidgetUpdate()
     }
 
     suspend fun deleteTransaction(id: String) {
@@ -229,10 +243,9 @@ class SpendoFinancialRepository(
         transactionDao.deleteTransactionById(id)
 
         // Reverse balance impact if bank known
-        existing.bankAccountName?.let { bankName ->
-            val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
-            adjustBankBalanceByName(bankName, reverseDelta)
-        }
+        val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
+        adjustBankBalance(existing.bankAccountId, existing.bankAccountName, reverseDelta)
+        notifyWidgetUpdate()
     }
 
     // -------------------------------------------------------------
@@ -246,10 +259,12 @@ class SpendoFinancialRepository(
             val delta = if (tx.direction == "DEBIT") -tx.amountPaise else tx.amountPaise
             adjustBankBalanceByName(bankName, delta)
         }
+        notifyWidgetUpdate()
     }
 
     suspend fun rejectReviewTransaction(id: String) {
         transactionDao.deleteTransactionById(id)
+        notifyWidgetUpdate()
     }
 
     suspend fun updateAndApproveReviewTransaction(
@@ -276,6 +291,7 @@ class SpendoFinancialRepository(
         if (rememberMerchantPreference && merchant.isNotBlank()) {
             setMerchantCategoryRule(merchant, category)
         }
+        notifyWidgetUpdate()
     }
 
     suspend fun setMerchantCategoryRule(merchant: String, category: String) {
@@ -350,6 +366,7 @@ class SpendoFinancialRepository(
         // Balance impact: source decreases, destination increases
         adjustBankBalanceByName(sourceBankName, -amountPaise)
         adjustBankBalanceByName(destinationBankName, amountPaise)
+        notifyWidgetUpdate()
 
         return Pair(debitId, creditId)
     }
@@ -380,6 +397,7 @@ class SpendoFinancialRepository(
         )
         transactionDao.insertTransaction(entity)
         adjustBankBalanceByName(toBankName, amountPaise)
+        notifyWidgetUpdate()
         return id
     }
 
@@ -409,6 +427,7 @@ class SpendoFinancialRepository(
         )
         transactionDao.insertTransaction(entity)
         adjustBankBalanceByName(fromBankName, -amountPaise)
+        notifyWidgetUpdate()
         return id
     }
 
@@ -543,6 +562,7 @@ class SpendoFinancialRepository(
                 updatedAtEpochMs = now
             )
         )
+        notifyWidgetUpdate()
     }
 
     // -------------------------------------------------------------
@@ -557,7 +577,9 @@ class SpendoFinancialRepository(
         bankName: String,
         accountType: String,
         initialBalancePaise: Long,
-        maskedNumber: String = "•••• ${(1000..9999).random()}"
+        maskedNumber: String = "•••• ${(1000..9999).random()}",
+        accountNickname: String? = null,
+        notes: String? = null
     ): String {
         val id = "bank_${UUID.randomUUID()}"
         val now = System.currentTimeMillis()
@@ -565,30 +587,110 @@ class SpendoFinancialRepository(
         val account = BankAccountEntity(
             id = id,
             bankName = bankName,
+            accountNickname = accountNickname?.trim()?.ifBlank { null },
             accountType = accountType,
             maskedAccountNumber = maskedNumber,
             balancePaise = initialBalancePaise,
             openingBalancePaise = initialBalancePaise,
             isPrimary = count == 0,
+            notes = notes?.trim()?.ifBlank { null },
             createdAtEpochMs = now,
             updatedAtEpochMs = now
         )
         bankAccountDao.insertBankAccount(account)
+        notifyWidgetUpdate()
         return id
+    }
+
+    suspend fun updateBankAccountDetails(
+        id: String,
+        bankName: String,
+        accountNickname: String?,
+        accountType: String,
+        maskedNumber: String,
+        balancePaise: Long,
+        notes: String?
+    ) {
+        val existing = bankAccountDao.getBankAccountByIdDirect(id) ?: return
+        val updated = existing.copy(
+            bankName = bankName,
+            accountNickname = accountNickname?.trim()?.ifBlank { null },
+            accountType = accountType,
+            maskedAccountNumber = maskedNumber,
+            balancePaise = balancePaise,
+            notes = notes?.trim()?.ifBlank { null },
+            updatedAtEpochMs = System.currentTimeMillis()
+        )
+        bankAccountDao.updateBankAccount(updated)
+        notifyWidgetUpdate()
     }
 
     suspend fun updateBankAccountBalance(id: String, newBalancePaise: Long) {
         bankAccountDao.updateBalance(id, newBalancePaise)
+        notifyWidgetUpdate()
     }
 
     suspend fun deleteBankAccount(id: String) {
         bankAccountDao.deleteBankAccountById(id)
+        notifyWidgetUpdate()
+    }
+
+    suspend fun transferBetweenAccounts(
+        sourceAccountId: String,
+        destinationAccountId: String,
+        amountPaise: Long,
+        note: String? = null
+    ) {
+        require(amountPaise > 0) { "Transfer amount must be strictly positive" }
+        require(sourceAccountId != destinationAccountId) { "Source and destination accounts must be different" }
+
+        val sourceAccount = bankAccountDao.getBankAccountByIdDirect(sourceAccountId) ?: return
+        val destAccount = bankAccountDao.getBankAccountByIdDirect(destinationAccountId) ?: return
+
+        // 1. Deduct from source
+        adjustBankBalanceById(sourceAccountId, -amountPaise)
+        // 2. Credit to destination
+        adjustBankBalanceById(destinationAccountId, amountPaise)
+
+        // 3. Record internal transfer transaction
+        val now = System.currentTimeMillis()
+        val tx = TransactionEntity(
+            id = "tx_${UUID.randomUUID()}",
+            amountPaise = amountPaise,
+            currencyCode = "INR",
+            direction = "TRANSFER",
+            merchant = "Transfer: ${sourceAccount.bankName} ➔ ${destAccount.bankName}",
+            note = note ?: "Internal account transfer",
+            categoryId = "TRANSFER",
+            occurredAtEpochMillis = now,
+            sourceType = "MANUAL",
+            reviewStatus = "CONFIRMED",
+            createdAtEpochMillis = now,
+            updatedAtEpochMillis = now,
+            bankAccountId = sourceAccountId,
+            bankAccountName = "${sourceAccount.bankName} ➔ ${destAccount.bankName}"
+        )
+        transactionDao.insertTransaction(tx)
+    }
+
+    suspend fun adjustBankBalanceById(bankAccountId: String, deltaPaise: Long) {
+        val account = bankAccountDao.getBankAccountByIdDirect(bankAccountId) ?: return
+        val newBalance = (account.balancePaise + deltaPaise).coerceAtLeast(0L)
+        bankAccountDao.updateBalance(account.id, newBalance)
     }
 
     private suspend fun adjustBankBalanceByName(bankName: String, deltaPaise: Long) {
         val account = bankAccountDao.getBankAccountByNameDirect(bankName) ?: return
         val newBalance = (account.balancePaise + deltaPaise).coerceAtLeast(0L)
         bankAccountDao.updateBalance(account.id, newBalance)
+    }
+
+    private suspend fun adjustBankBalance(bankAccountId: String?, bankAccountName: String?, deltaPaise: Long) {
+        if (!bankAccountId.isNullOrBlank()) {
+            adjustBankBalanceById(bankAccountId, deltaPaise)
+        } else if (!bankAccountName.isNullOrBlank()) {
+            adjustBankBalanceByName(bankAccountName, deltaPaise)
+        }
     }
 
     // -------------------------------------------------------------
@@ -710,11 +812,81 @@ class SpendoFinancialRepository(
         )
     }
 
-    suspend fun importTransactionsFromCsv(inputStream: java.io.InputStream): Int {
-        val entities = com.spendwise.android.util.CsvImporter.parseCsv(inputStream)
-        if (entities.isEmpty()) return 0
-        transactionDao.insertTransactions(entities)
-        return entities.size
+    suspend fun updateTransaction(transaction: TransactionEntity) {
+        val existing = transactionDao.getTransactionByIdDirect(transaction.id)
+        if (existing != null) {
+            val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
+            adjustBankBalance(existing.bankAccountId, existing.bankAccountName, reverseDelta)
+
+            val applyDelta = if (transaction.direction == "DEBIT") -transaction.amountPaise else transaction.amountPaise
+            adjustBankBalance(transaction.bankAccountId, transaction.bankAccountName, applyDelta)
+        }
+        transactionDao.updateTransaction(transaction)
+    }
+
+    suspend fun importTransactionsFromCsv(inputStream: java.io.InputStream): com.spendwise.android.util.CsvImportResult {
+        val (parsedEntities, rejectedCount) = com.spendwise.android.util.CsvImporter.parseCsvDetailed(inputStream)
+        if (parsedEntities.isEmpty() && rejectedCount == 0) {
+            return com.spendwise.android.util.CsvImportResult(0, 0, 0, 0, "Selected file is empty")
+        }
+
+        val existingIds = transactionDao.getAllTransactionIds().toSet()
+        val toInsert = mutableListOf<TransactionEntity>()
+        var skippedCount = 0
+
+        for (entity in parsedEntities) {
+            if (existingIds.contains(entity.id)) {
+                skippedCount++
+            } else {
+                toInsert.add(entity)
+            }
+        }
+
+        if (toInsert.isNotEmpty()) {
+            database.withTransaction {
+                transactionDao.insertTransactions(toInsert)
+            }
+        }
+
+        return com.spendwise.android.util.CsvImportResult(
+            importedCount = toInsert.size,
+            skippedCount = skippedCount,
+            rejectedCount = rejectedCount,
+            totalProcessed = parsedEntities.size + rejectedCount
+        )
+    }
+
+    suspend fun exportTransactionsToCsv(outputStream: java.io.OutputStream): Int {
+        val confirmedEntities = transactionDao.getConfirmedTransactionsDirect()
+        com.spendwise.android.util.CsvExporter.writeFullEntitiesToStream(confirmedEntities, outputStream)
+        return confirmedEntities.size
+    }
+
+    suspend fun saveSecureAiConfig(providerId: String, model: String, apiKey: String, lastTestMessage: String? = null) {
+        secureKeyStorage.saveApiKey(providerId, apiKey)
+        secureKeyStorage.saveActiveProvider(providerId, model)
+        saveAiConfigMetadata(
+            providerId = providerId,
+            displayName = providerId,
+            selectedModel = model,
+            isConfigured = apiKey.isNotBlank(),
+            lastTestMessage = lastTestMessage
+        )
+    }
+
+    suspend fun loadSecureAiApiKey(providerId: String): String? {
+        return secureKeyStorage.getApiKey(providerId)
+    }
+
+    suspend fun deleteSecureAiConfig(providerId: String) {
+        secureKeyStorage.deleteApiKey(providerId)
+        saveAiConfigMetadata(
+            providerId = providerId,
+            displayName = providerId,
+            selectedModel = "",
+            isConfigured = false,
+            lastTestMessage = null
+        )
     }
 
     // -------------------------------------------------------------
@@ -781,6 +953,7 @@ class SpendoFinancialRepository(
             }
             notificationRecordDao.insertNotificationRecords(defaultNotifications)
         }
+        notifyWidgetUpdate()
     }
 
     private fun getTodayEpochRange(): Pair<Long, Long> {
@@ -829,7 +1002,8 @@ fun TransactionEntity.toSpendoTransaction(): SpendoTransaction {
         source = txSource,
         note = note,
         reviewStatus = reviewStatus,
-        reviewReason = note
+        reviewReason = note,
+        bankAccountId = bankAccountId
     )
 }
 
@@ -840,7 +1014,9 @@ fun BankAccountEntity.toSpendoBank(): SpendoBank {
         accountType = accountType,
         maskedAccountNumber = maskedAccountNumber,
         balancePaise = balancePaise,
-        isPrimary = isPrimary
+        isPrimary = isPrimary,
+        accountNickname = accountNickname,
+        notes = notes
     )
 }
 

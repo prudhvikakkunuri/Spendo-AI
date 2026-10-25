@@ -16,6 +16,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -37,14 +39,27 @@ fun SpendoNotificationSettingsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = androidx.compose.runtime.remember {
+        context.getSharedPreferences("spendo_reminder_prefs", android.content.Context.MODE_PRIVATE)
+    }
+
+    var morningEnabled by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(prefs.getBoolean(com.spendwise.android.notification.SpendoReminderScheduler.KEY_MORNING_ENABLED, true))
+    }
+    var eveningEnabled by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(prefs.getBoolean(com.spendwise.android.notification.SpendoReminderScheduler.KEY_EVENING_ENABLED, true))
+    }
+    var testNotificationSent by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(SpendoColor.Background)
     ) {
         SpendoTopBar(
-            title = "Notification Detection",
-            categoryBadge = "AUTOMATION",
+            title = "Notifications & Reminders",
+            categoryBadge = "AUTOMATION & SCHEDULES",
             onNavigateBack = onNavigateBack
         )
 
@@ -54,6 +69,155 @@ fun SpendoNotificationSettingsScreen(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Daily Reminders Header
+            item {
+                DotMatrixText(text = "Daily Expense Reminders", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+            }
+
+            // Morning Reminder Card
+            item {
+                SpendoDarkCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            DotGridBadge(
+                                text = "9:00 AM Daily",
+                                indicatorColor = if (morningEnabled) SpendoColor.SuccessGreen else SpendoColor.TextMuted,
+                                containerColor = androidx.compose.ui.graphics.Color(0xFF262626),
+                                textColor = SpendoColor.CardDarkText
+                            )
+                            Text(
+                                text = "Morning Review Reminder 🌤️",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = SpendoColor.CardDarkText
+                            )
+                            Text(
+                                text = "Prompt to review yesterday's expenses and record any missing cash or UPI spending.",
+                                fontSize = 12.sp,
+                                color = SpendoColor.CardDarkTextSecondary
+                            )
+                        }
+
+                        Switch(
+                            checked = morningEnabled,
+                            onCheckedChange = { isChecked ->
+                                morningEnabled = isChecked
+                                com.spendwise.android.notification.SpendoReminderScheduler.updatePreferences(
+                                    context = context,
+                                    morningEnabled = isChecked,
+                                    morningHour = 9,
+                                    morningMinute = 0,
+                                    eveningEnabled = eveningEnabled,
+                                    eveningHour = 20,
+                                    eveningMinute = 30
+                                )
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = SpendoColor.Surface,
+                                checkedTrackColor = SpendoColor.SuccessGreen,
+                                uncheckedThumbColor = SpendoColor.TextMuted,
+                                uncheckedTrackColor = androidx.compose.ui.graphics.Color(0xFF333333)
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Evening Reminder Card
+            item {
+                SpendoDarkCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            DotGridBadge(
+                                text = "8:30 PM Daily",
+                                indicatorColor = if (eveningEnabled) SpendoColor.SuccessGreen else SpendoColor.TextMuted,
+                                containerColor = androidx.compose.ui.graphics.Color(0xFF262626),
+                                textColor = SpendoColor.CardDarkText
+                            )
+                            Text(
+                                text = "Evening Logging Reminder 🌙",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = SpendoColor.CardDarkText
+                            )
+                            Text(
+                                text = "Encourage logging today's outlays before you call it a day.",
+                                fontSize = 12.sp,
+                                color = SpendoColor.CardDarkTextSecondary
+                            )
+                        }
+
+                        Switch(
+                            checked = eveningEnabled,
+                            onCheckedChange = { isChecked ->
+                                eveningEnabled = isChecked
+                                com.spendwise.android.notification.SpendoReminderScheduler.updatePreferences(
+                                    context = context,
+                                    morningEnabled = morningEnabled,
+                                    morningHour = 9,
+                                    morningMinute = 0,
+                                    eveningEnabled = isChecked,
+                                    eveningHour = 20,
+                                    eveningMinute = 30
+                                )
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = SpendoColor.Surface,
+                                checkedTrackColor = SpendoColor.SuccessGreen,
+                                uncheckedThumbColor = SpendoColor.TextMuted,
+                                uncheckedTrackColor = androidx.compose.ui.graphics.Color(0xFF333333)
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Test Reminder Action
+            item {
+                SpendoCard(contentPadding = 14.dp) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = if (testNotificationSent) "Test Notification Dispatched!" else "Test Reminder Notification",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (testNotificationSent) SpendoColor.SuccessGreen else SpendoColor.TextPrimary
+                            )
+                            Text(
+                                text = "Verify sound, banner, and quick-add actions immediately.",
+                                fontSize = 12.sp,
+                                color = SpendoColor.TextSecondary
+                            )
+                        }
+
+                        com.spendwise.android.ui.spendo.components.SpendoOutlinedButton(
+                            text = "Test Now",
+                            onClick = {
+                                com.spendwise.android.notification.SpendoNotificationHelper.showTestNotification(context)
+                                testNotificationSent = true
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Detection Section Header
+            item {
+                DotMatrixText(text = "Automatic Notification Ingestion", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+            }
+
             // Master Switch Dark Card
             item {
                 SpendoDarkCard {

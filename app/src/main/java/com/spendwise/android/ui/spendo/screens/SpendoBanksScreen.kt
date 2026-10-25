@@ -2,6 +2,8 @@ package com.spendwise.android.ui.spendo.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,11 +22,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,11 +69,15 @@ fun SpendoBanksScreen(
     onToggleUnlockDialog: (Boolean) -> Unit,
     onVerifyAndUnlock: (password: String, onSuccess: () -> Unit, onError: () -> Unit) -> Unit,
     onHideBalances: () -> Unit,
-    onAddBank: (name: String, type: String, initialPaise: Long) -> Unit,
+    onAddBank: (name: String, type: String, initialPaise: Long, nickname: String?, maskedNumber: String?, notes: String?) -> Unit,
+    onEditBank: (id: String, name: String, type: String, balancePaise: Long, nickname: String?, maskedNumber: String?, notes: String?) -> Unit = { _, _, _, _, _, _, _ -> },
+    onDeleteBank: (id: String) -> Unit = {},
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showAddBankDialog by remember { mutableStateOf(false) }
+    var editingBank by remember { mutableStateOf<SpendoBank?>(null) }
+    var deletingBank by remember { mutableStateOf<SpendoBank?>(null) }
 
     Column(
         modifier = modifier
@@ -254,17 +264,38 @@ fun SpendoBanksScreen(
                                 }
 
                                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(
-                                        text = bank.bankName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SpendoColor.TextPrimary
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = bank.bankName,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = SpendoColor.TextPrimary
+                                        )
+                                        if (!bank.accountNickname.isNullOrBlank()) {
+                                            DotGridBadge(
+                                                text = bank.accountNickname,
+                                                indicatorColor = SpendoColor.SuccessGreen,
+                                                containerColor = SpendoColor.SurfaceVariant,
+                                                textColor = SpendoColor.TextPrimary
+                                            )
+                                        }
+                                    }
                                     Text(
                                         text = "${bank.accountType} • ${bank.maskedAccountNumber}",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = SpendoColor.TextSecondary
                                     )
+                                    if (!bank.notes.isNullOrBlank()) {
+                                        Text(
+                                            text = bank.notes,
+                                            fontSize = 11.sp,
+                                            color = SpendoColor.TextMuted,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
                                 }
                             }
 
@@ -311,7 +342,7 @@ fun SpendoBanksScreen(
                             }
                         }
 
-                        // Divider & Meta Readouts (Source, Last Updated, Recent Activity)
+                        // Divider & Meta Readouts (Source, Last Updated, Actions)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -361,13 +392,32 @@ fun SpendoBanksScreen(
                                 )
                             }
 
-                            bank.recentTransactionSummary?.let { summary ->
-                                Text(
-                                    text = summary,
-                                    fontSize = 11.sp,
-                                    color = SpendoColor.TextSecondary,
-                                    fontFamily = FontFamily.Monospace
-                                )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                IconButton(
+                                    onClick = { editingBank = bank },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Edit,
+                                        contentDescription = "Edit Account",
+                                        tint = SpendoColor.TextSecondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { deletingBank = bank },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Delete,
+                                        contentDescription = "Delete Account",
+                                        tint = SpendoColor.AccentRed.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -488,8 +538,22 @@ fun SpendoBanksScreen(
     // Add Bank Dialog
     if (showAddBankDialog) {
         var bankNameInput by remember { mutableStateOf("") }
+        var nicknameInput by remember { mutableStateOf("") }
         var accountTypeInput by remember { mutableStateOf("Savings") }
+        var last4Input by remember { mutableStateOf("") }
         var initialBalanceInput by remember { mutableStateOf("") }
+        var notesInput by remember { mutableStateOf("") }
+
+        val bankSuggestions = listOf("HDFC", "SBI", "ICICI", "Axis", "Kotak")
+        val isDuplicate = remember(bankNameInput, last4Input, uiState.banks) {
+            val digits = last4Input.filter { it.isDigit() }
+            if (digits.length >= 4 && bankNameInput.isNotBlank()) {
+                uiState.banks.any {
+                    it.bankName.equals(bankNameInput.trim(), ignoreCase = true) &&
+                            it.maskedAccountNumber.endsWith(digits)
+                }
+            } else false
+        }
 
         AlertDialog(
             onDismissRequest = { showAddBankDialog = false },
@@ -503,19 +567,66 @@ fun SpendoBanksScreen(
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Multiple accounts belonging to the same bank can be added with distinct nicknames and account numbers.",
+                        fontSize = 12.sp,
+                        color = SpendoColor.TextSecondary,
+                        lineHeight = 16.sp
+                    )
+
+                    // Quick Bank Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        bankSuggestions.forEach { suggestion ->
+                            FilterChip(
+                                selected = bankNameInput.equals(suggestion, ignoreCase = true),
+                                onClick = { bankNameInput = suggestion },
+                                label = { Text(suggestion, fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = SpendoColor.TextPrimary,
+                                    selectedLabelColor = SpendoColor.Background,
+                                    containerColor = SpendoColor.SurfaceVariant,
+                                    labelColor = SpendoColor.TextPrimary
+                                )
+                            )
+                        }
+                    }
+
                     SpendoTextField(
                         value = bankNameInput,
                         onValueChange = { bankNameInput = it },
                         label = "Bank Name",
-                        placeholder = "e.g. HDFC, SBI, ICICI, Axis"
+                        placeholder = "e.g. HDFC, SBI, Kotak"
                     )
+
+                    SpendoTextField(
+                        value = nicknameInput,
+                        onValueChange = { nicknameInput = it },
+                        label = "Account Nickname (Optional)",
+                        placeholder = "e.g. Salary, Savings, Emergency"
+                    )
+
                     SpendoTextField(
                         value = accountTypeInput,
                         onValueChange = { accountTypeInput = it },
                         label = "Account Type",
-                        placeholder = "Savings / Current / Credit Card"
+                        placeholder = "Savings / Salary / Current / Credit Card"
                     )
+
+                    SpendoTextField(
+                        value = last4Input,
+                        onValueChange = { if (it.length <= 4) last4Input = it.filter { ch -> ch.isDigit() } },
+                        label = "Last 4 Digits (Optional)",
+                        placeholder = "e.g. 5678",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
                     SpendoTextField(
                         value = initialBalanceInput,
                         onValueChange = { initialBalanceInput = it.filter { ch -> ch.isDigit() } },
@@ -523,14 +634,37 @@ fun SpendoBanksScreen(
                         placeholder = "e.g. 25000",
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
+
+                    SpendoTextField(
+                        value = notesInput,
+                        onValueChange = { notesInput = it },
+                        label = "Notes (Optional)",
+                        placeholder = "e.g. Primary salary account"
+                    )
+
+                    if (isDuplicate) {
+                        Text(
+                            text = "Notice: An account with this bank name and last 4 digits already exists. If this is a separate account, make sure the nickname is distinct.",
+                            fontSize = 11.sp,
+                            color = SpendoColor.WarningAmber,
+                            lineHeight = 15.sp
+                        )
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         if (bankNameInput.isNotBlank()) {
-                            val paise = (initialBalanceInput.toLongOrNull() ?: 10000L) * 100
-                            onAddBank(bankNameInput, accountTypeInput, paise)
+                            val paise = (initialBalanceInput.toLongOrNull() ?: 0L) * 100
+                            onAddBank(
+                                bankNameInput.trim(),
+                                accountTypeInput.trim(),
+                                paise,
+                                nicknameInput.trim().ifBlank { null },
+                                last4Input.trim().ifBlank { null },
+                                notesInput.trim().ifBlank { null }
+                            )
                             showAddBankDialog = false
                         }
                     }
@@ -540,6 +674,143 @@ fun SpendoBanksScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAddBankDialog = false }) {
+                    Text("Cancel", color = SpendoColor.TextSecondary)
+                }
+            },
+            containerColor = SpendoColor.Surface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // Edit Bank Dialog
+    editingBank?.let { targetBank ->
+        var editBankName by remember(targetBank) { mutableStateOf(targetBank.bankName) }
+        var editNickname by remember(targetBank) { mutableStateOf(targetBank.accountNickname ?: "") }
+        var editType by remember(targetBank) { mutableStateOf(targetBank.accountType) }
+        var editLast4 by remember(targetBank) { mutableStateOf(targetBank.maskedAccountNumber.filter { it.isDigit() }.takeLast(4)) }
+        var editBalanceText by remember(targetBank) { mutableStateOf((targetBank.balancePaise / 100).toString()) }
+        var editNotes by remember(targetBank) { mutableStateOf(targetBank.notes ?: "") }
+
+        AlertDialog(
+            onDismissRequest = { editingBank = null },
+            title = {
+                Text(
+                    "Edit Bank Account",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = SpendoColor.TextPrimary,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SpendoTextField(
+                        value = editBankName,
+                        onValueChange = { editBankName = it },
+                        label = "Bank Name",
+                        placeholder = "e.g. HDFC"
+                    )
+                    SpendoTextField(
+                        value = editNickname,
+                        onValueChange = { editNickname = it },
+                        label = "Account Nickname",
+                        placeholder = "e.g. Salary, Savings"
+                    )
+                    SpendoTextField(
+                        value = editType,
+                        onValueChange = { editType = it },
+                        label = "Account Type",
+                        placeholder = "Savings / Current"
+                    )
+                    SpendoTextField(
+                        value = editLast4,
+                        onValueChange = { if (it.length <= 4) editLast4 = it.filter { ch -> ch.isDigit() } },
+                        label = "Last 4 Digits",
+                        placeholder = "e.g. 1234",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    SpendoTextField(
+                        value = editBalanceText,
+                        onValueChange = { editBalanceText = it.filter { ch -> ch.isDigit() } },
+                        label = "Tracked Balance in ₹",
+                        placeholder = "e.g. 50000",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    SpendoTextField(
+                        value = editNotes,
+                        onValueChange = { editNotes = it },
+                        label = "Notes (Optional)",
+                        placeholder = "Account notes"
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (editBankName.isNotBlank()) {
+                            val newPaise = (editBalanceText.toLongOrNull() ?: (targetBank.balancePaise / 100)) * 100
+                            onEditBank(
+                                targetBank.id,
+                                editBankName.trim(),
+                                editType.trim(),
+                                newPaise,
+                                editNickname.trim().ifBlank { null },
+                                editLast4.trim().ifBlank { null },
+                                editNotes.trim().ifBlank { null }
+                            )
+                            editingBank = null
+                        }
+                    }
+                ) {
+                    Text("Save Changes", color = SpendoColor.TextPrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingBank = null }) {
+                    Text("Cancel", color = SpendoColor.TextSecondary)
+                }
+            },
+            containerColor = SpendoColor.Surface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // Delete Confirmation Dialog
+    deletingBank?.let { targetBank ->
+        AlertDialog(
+            onDismissRequest = { deletingBank = null },
+            title = {
+                Text(
+                    "Delete Bank Account",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = SpendoColor.AccentRed,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to remove ${targetBank.displayName} (${targetBank.maskedAccountNumber})? Historical transactions will remain in your ledger.",
+                    fontSize = 13.sp,
+                    color = SpendoColor.TextSecondary,
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteBank(targetBank.id)
+                        deletingBank = null
+                    }
+                ) {
+                    Text("Delete Account", color = SpendoColor.AccentRed, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingBank = null }) {
                     Text("Cancel", color = SpendoColor.TextSecondary)
                 }
             },

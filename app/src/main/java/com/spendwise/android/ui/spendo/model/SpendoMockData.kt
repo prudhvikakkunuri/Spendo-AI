@@ -23,7 +23,8 @@ data class SpendoTransaction(
     val source: TransactionSource,
     val note: String? = null,
     val reviewStatus: String = "CONFIRMED",
-    val reviewReason: String? = null
+    val reviewReason: String? = null,
+    val bankAccountId: String? = null
 ) {
     val amountRupees: Double get() = amountPaise / 100.0
     val formattedAmount: String get() = "₹%,.2f".format(Locale.ENGLISH, amountRupees)
@@ -48,8 +49,11 @@ data class SpendoBank(
     val isPrimary: Boolean = false,
     val balanceSource: BalanceSource = BalanceSource.CALCULATED,
     val lastUpdatedText: String = "Updated recently",
-    val recentTransactionSummary: String? = null
+    val recentTransactionSummary: String? = null,
+    val accountNickname: String? = null,
+    val notes: String? = null
 ) {
+    val displayName: String get() = if (!accountNickname.isNullOrBlank()) "$bankName ($accountNickname)" else bankName
     val balanceRupees: Double get() = balancePaise / 100.0
     val formattedBalance: String get() = "₹%,.2f".format(Locale.ENGLISH, balanceRupees)
 }

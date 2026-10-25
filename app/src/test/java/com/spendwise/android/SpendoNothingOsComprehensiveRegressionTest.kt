@@ -295,6 +295,11 @@ class SpendoNothingOsComprehensiveRegressionTest {
         override suspend fun getTransactionByIdDirect(id: String): TransactionEntity? =
             transactions.find { it.id == id }
 
+        override suspend fun getAllTransactionIds(): List<String> = transactions.map { it.id }
+
+        override suspend fun getConfirmedTransactionsDirect(): List<TransactionEntity> =
+            transactions.filter { it.reviewStatus == "CONFIRMED" }
+
         override suspend fun getTransactionByDedupeKey(dedupeKey: String): TransactionEntity? =
             transactions.find { it.dedupeKey == dedupeKey }
 

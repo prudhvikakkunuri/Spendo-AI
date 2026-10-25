@@ -47,7 +47,7 @@ fun SpendoNavHost(
             SpendoHomeScreen(
                 uiState = uiState,
                 onNavigateToAddTransaction = { navController.navigate(SpendoScreen.AddTransaction.route) },
-                onNavigateToAddIncome = { navController.navigate(SpendoScreen.AddTransaction.route) },
+                onNavigateToAddIncome = { navController.navigate(SpendoScreen.AddTransaction.createRoute(TransactionType.INCOME)) },
                 onNavigateToBanks = { navController.navigate(SpendoScreen.Banks.route) },
                 onNavigateToAnalytics = { navController.navigate(SpendoScreen.Analytics.route) },
                 onNavigateToSettings = { navController.navigate(SpendoScreen.Settings.route) },
@@ -97,12 +97,26 @@ fun SpendoNavHost(
         }
 
         // SCREEN 5 — ADD EXPENSE / INCOME
-        composable(SpendoScreen.AddTransaction.route) {
+        composable(
+            route = "spendo_add_transaction?type={type}",
+            arguments = listOf(
+                navArgument("type") {
+                    type = NavType.StringType
+                    defaultValue = "EXPENSE"
+                }
+            )
+        ) { backStackEntry ->
+            val typeArg = backStackEntry.arguments?.getString("type") ?: "EXPENSE"
+            val initialType = if (typeArg.equals("INCOME", ignoreCase = true)) {
+                TransactionType.INCOME
+            } else {
+                TransactionType.EXPENSE
+            }
             SpendoAddTransactionScreen(
                 banks = uiState.banks,
-                initialType = TransactionType.EXPENSE,
-                onSaveTransaction = { merchant, amountPaise, type, category, bankName, note ->
-                    viewModel.addTransaction(merchant, amountPaise, type, category, bankName, note)
+                initialType = initialType,
+                onSaveTransaction = { merchant, amountPaise, type, category, bankName, note, bankAccountId ->
+                    viewModel.addTransaction(merchant, amountPaise, type, category, bankName, note, bankAccountId)
                 },
                 onNavigateBack = { navController.popBackStack() }
             )
@@ -117,6 +131,8 @@ fun SpendoNavHost(
             SpendoTransactionDetailScreen(
                 transactionId = transactionId,
                 transactions = uiState.transactions,
+                banks = uiState.banks,
+                onUpdateTransaction = { viewModel.updateTransaction(it) },
                 onDeleteTransaction = { viewModel.deleteTransaction(it) },
                 onNavigateBack = { navController.popBackStack() }
             )
@@ -149,7 +165,13 @@ fun SpendoNavHost(
                     viewModel.verifyAndUnlockBalances(password, onSuccess, onError)
                 },
                 onHideBalances = { viewModel.hideBalances() },
-                onAddBank = { name, type, initial -> viewModel.addBank(name, type, initial) },
+                onAddBank = { name, type, initial, nickname, masked, notes ->
+                    viewModel.addBank(name, type, initial, nickname, masked, notes)
+                },
+                onEditBank = { id, name, type, balance, nickname, masked, notes ->
+                    viewModel.editBank(id, name, type, balance, nickname, masked, notes)
+                },
+                onDeleteBank = { id -> viewModel.deleteBank(id) },
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -158,7 +180,7 @@ fun SpendoNavHost(
         composable(SpendoScreen.Income.route) {
             SpendoIncomeScreen(
                 uiState = uiState,
-                onNavigateToAddIncome = { navController.navigate(SpendoScreen.AddTransaction.route) },
+                onNavigateToAddIncome = { navController.navigate(SpendoScreen.AddTransaction.createRoute(TransactionType.INCOME)) },
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -179,7 +201,8 @@ fun SpendoNavHost(
                 onSendMessage = { viewModel.sendChatMessage(it) },
                 onNavigateToAiConfig = { navController.navigate(SpendoScreen.AiConfig.route) },
                 onConfirmExpense = { pending, msgId -> viewModel.confirmPendingExpense(pending, msgId) },
-                onDismissExpense = { msgId -> viewModel.dismissPendingExpense(msgId) }
+                onDismissExpense = { msgId -> viewModel.dismissPendingExpense(msgId) },
+                onClearChat = { viewModel.clearChatMessages() }
             )
         }
 
@@ -192,6 +215,7 @@ fun SpendoNavHost(
                 onModelChange = { viewModel.setAiModel(it) },
                 onTestConnection = { viewModel.testAiConnection() },
                 onSaveConfig = { viewModel.saveAiConfiguration() },
+                onDeleteConfig = { viewModel.deleteAiConfiguration() },
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -211,7 +235,8 @@ fun SpendoNavHost(
             SpendoImportExportScreen(
                 totalTransactionsCount = uiState.transactions.size,
                 onNavigateBack = { navController.popBackStack() },
-                onImportCsv = { stream, onDone -> viewModel.importCsv(stream, onDone) }
+                onImportCsv = { stream, onDone -> viewModel.importCsv(stream, onDone) },
+                onExportCsv = { stream, onDone -> viewModel.exportCsv(stream, onDone) }
             )
         }
 

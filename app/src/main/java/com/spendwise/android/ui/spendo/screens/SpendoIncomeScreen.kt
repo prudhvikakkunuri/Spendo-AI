@@ -15,8 +15,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.CallReceived
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.CallReceived
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -79,8 +79,14 @@ fun SpendoIncomeScreen(
                                 containerColor = androidx.compose.ui.graphics.Color(0xFF262626),
                                 textColor = SpendoColor.CardDarkText
                             )
+                            val nextPayDateText = uiState.incomes.firstOrNull()?.nextPayDate ?: androidx.compose.runtime.remember {
+                                val cal = java.util.Calendar.getInstance()
+                                cal.add(java.util.Calendar.MONTH, 1)
+                                cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+                                java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(cal.time)
+                            }
                             Text(
-                                text = "01 NOV 2026",
+                                text = nextPayDateText.uppercase(java.util.Locale.getDefault()),
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -144,7 +150,7 @@ fun SpendoIncomeScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.CallReceived,
+                                    imageVector = Icons.AutoMirrored.Outlined.CallReceived,
                                     contentDescription = null,
                                     tint = androidx.compose.ui.graphics.Color(0xFF388E3C),
                                     modifier = Modifier.size(18.dp)

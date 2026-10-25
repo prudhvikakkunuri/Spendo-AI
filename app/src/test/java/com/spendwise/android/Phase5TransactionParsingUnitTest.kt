@@ -489,6 +489,11 @@ class Phase5TransactionParsingUnitTest {
         override suspend fun getTransactionByIdDirect(id: String): TransactionEntity? =
             transactions.firstOrNull { it.id == id }
 
+        override suspend fun getAllTransactionIds(): List<String> = transactions.map { it.id }
+
+        override suspend fun getConfirmedTransactionsDirect(): List<TransactionEntity> =
+            transactions.filter { it.reviewStatus == "CONFIRMED" }
+
         override suspend fun insertTransaction(transaction: TransactionEntity) {
             transactions.removeAll { it.id == transaction.id }
             transactions.add(transaction)
