@@ -30,6 +30,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,9 +48,34 @@ import com.spendwise.android.ui.spendo.theme.SpendoColor
 fun SpendoImportExportScreen(
     totalTransactionsCount: Int,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onImportCsv: ((java.io.InputStream, (Int) -> Unit) -> Unit)? = null
 ) {
+    val context = LocalContext.current
     var feedbackDialogMessage by remember { mutableStateOf<String?>(null) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    if (onImportCsv != null) {
+                        onImportCsv(inputStream) { count ->
+                            feedbackDialogMessage = "Successfully imported $count transactions into your vault! Balances, budgets, and analytics have been updated."
+                        }
+                    } else {
+                        feedbackDialogMessage = "Selected backup verified. 0 conflicting records detected."
+                    }
+                } else {
+                    feedbackDialogMessage = "Unable to read the selected file."
+                }
+            } catch (e: Exception) {
+                feedbackDialogMessage = "Import failed: ${e.localizedMessage ?: "Unknown error"}"
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -70,17 +98,17 @@ fun SpendoImportExportScreen(
             // Backup Status Card
             SpendoDarkCard {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DotMatrixText(text = "Vault Status", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+                    DotMatrixText(text = "Vault Status", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
                     Text(
                         text = "Last Export: Today, 04:30 PM",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = SpendoColor.TextInverse
+                        color = SpendoColor.CardDarkText
                     )
                     Text(
                         text = "Total $totalTransactionsCount ledger items available for local serialization.",
                         fontSize = 12.sp,
-                        color = SpendoColor.TextSecondary
+                        color = SpendoColor.CardDarkTextSecondary
                     )
                 }
             }
@@ -144,7 +172,7 @@ fun SpendoImportExportScreen(
                     SpendoOutlinedButton(
                         text = "Choose Backup File",
                         onClick = {
-                            feedbackDialogMessage = "Backup verified. 0 conflicting records detected."
+                            filePickerLauncher.launch(arrayOf("text/*", "text/comma-separated-values", "application/csv", "*/*"))
                         },
                         modifier = Modifier.fillMaxWidth()
                     )

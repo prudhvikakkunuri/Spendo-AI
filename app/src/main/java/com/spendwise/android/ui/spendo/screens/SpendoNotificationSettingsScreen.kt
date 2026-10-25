@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spendwise.android.ui.spendo.components.DotGridBadge
@@ -66,17 +67,18 @@ fun SpendoNotificationSettingsScreen(
                                 text = if (uiState.isNotificationDetectionEnabled) "Active Ingestion" else "Paused",
                                 indicatorColor = if (uiState.isNotificationDetectionEnabled) SpendoColor.SuccessGreen else SpendoColor.AccentRed,
                                 containerColor = androidx.compose.ui.graphics.Color(0xFF262626),
-                                textColor = SpendoColor.TextInverse
+                                textColor = SpendoColor.CardDarkText
                             )
                             Text(
                                 text = "Auto-Detect Transactions",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = SpendoColor.TextInverse
+                                fontWeight = FontWeight.SemiBold,
+                                color = SpendoColor.CardDarkText
                             )
                             Text(
                                 text = "Listen for debit/credit alerts from permitted payment applications on device.",
                                 fontSize = 12.sp,
-                                color = SpendoColor.TextSecondary
+                                color = SpendoColor.CardDarkTextSecondary
                             )
                         }
 

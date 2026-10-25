@@ -17,6 +17,9 @@ import com.spendwise.android.ui.spendo.model.SpendoNotificationItem
 import com.spendwise.android.ui.spendo.model.SpendoTransaction
 import com.spendwise.android.ui.spendo.model.TransactionSource
 import com.spendwise.android.ui.spendo.model.TransactionType
+import com.spendwise.android.ui.spendo.model.AffordabilityEvaluation
+import com.spendwise.android.ui.spendo.model.AffordabilityVerdict
+import com.spendwise.android.ui.spendo.model.SpendoSavingsGoal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -36,7 +39,7 @@ import java.util.UUID
 class SpendoFinancialRepository(
     private val database: AppDatabase,
     private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO)
-) {
+) : com.spendwise.android.domain.security.SpendoSecurityStorage {
     private val transactionDao = database.transactionDao()
     private val categoryDao = database.categoryDao()
     private val budgetDao = database.budgetDao()
@@ -63,6 +66,23 @@ class SpendoFinancialRepository(
 
     val confirmedTransactions: Flow<List<SpendoTransaction>> = transactionDao.getConfirmedTransactions().map { entities ->
         entities.map { it.toSpendoTransaction() }
+    }
+
+    val pendingReviewTransactions: Flow<List<SpendoTransaction>> =
+        transactionDao.getTransactionsByStatus("NEEDS_REVIEW").map { entities ->
+            entities.map { it.toSpendoTransaction() }
+        }
+
+    val pendingReviewCount: Flow<Int> = transactionDao.getPendingReviewCount()
+
+    fun getTransactionsForMerchant(merchantQuery: String): Flow<List<SpendoTransaction>> {
+        return transactionDao.getTransactionsForMerchant(merchantQuery).map { entities ->
+            entities.map { it.toSpendoTransaction() }
+        }
+    }
+
+    suspend fun getMerchantTotalSpendDirect(merchantQuery: String): Long {
+        return transactionDao.getMerchantTotalSpendDirect(merchantQuery)
     }
 
     fun getTransactionById(id: String): Flow<SpendoTransaction?> {
@@ -216,6 +236,64 @@ class SpendoFinancialRepository(
     }
 
     // -------------------------------------------------------------
+    // Review Transactions Actions & Merchant-Category Memory
+    // -------------------------------------------------------------
+
+    suspend fun approveReviewTransaction(id: String) {
+        val tx = transactionDao.getTransactionByIdDirect(id) ?: return
+        transactionDao.updateReviewStatus(id, "CONFIRMED")
+        tx.bankAccountName?.let { bankName ->
+            val delta = if (tx.direction == "DEBIT") -tx.amountPaise else tx.amountPaise
+            adjustBankBalanceByName(bankName, delta)
+        }
+    }
+
+    suspend fun rejectReviewTransaction(id: String) {
+        transactionDao.deleteTransactionById(id)
+    }
+
+    suspend fun updateAndApproveReviewTransaction(
+        id: String,
+        merchant: String,
+        amountPaise: Long,
+        category: String,
+        bankAccountName: String,
+        rememberMerchantPreference: Boolean = false
+    ) {
+        val tx = transactionDao.getTransactionByIdDirect(id) ?: return
+        val updated = tx.copy(
+            merchant = merchant,
+            amountPaise = amountPaise,
+            categoryId = category,
+            bankAccountName = bankAccountName,
+            reviewStatus = "CONFIRMED",
+            updatedAtEpochMillis = System.currentTimeMillis()
+        )
+        transactionDao.updateTransaction(updated)
+        val delta = if (tx.direction == "DEBIT") -amountPaise else amountPaise
+        adjustBankBalanceByName(bankAccountName, delta)
+
+        if (rememberMerchantPreference && merchant.isNotBlank()) {
+            setMerchantCategoryRule(merchant, category)
+        }
+    }
+
+    suspend fun setMerchantCategoryRule(merchant: String, category: String) {
+        val cleanKey = "merchant_cat:" + merchant.trim().lowercase(Locale.ROOT)
+        appPreferenceDao.setPreference(AppPreferenceEntity(cleanKey, category))
+    }
+
+    fun getMerchantCategoryRule(merchant: String): Flow<String?> {
+        val cleanKey = "merchant_cat:" + merchant.trim().lowercase(Locale.ROOT)
+        return appPreferenceDao.getPreference(cleanKey).map { it?.value }
+    }
+
+    suspend fun getMerchantCategoryRuleDirect(merchant: String): String? {
+        val cleanKey = "merchant_cat:" + merchant.trim().lowercase(Locale.ROOT)
+        return appPreferenceDao.getPreferenceValueDirect(cleanKey)
+    }
+
+    // -------------------------------------------------------------
     // Transfers Between Accounts & External Transfers
     // -------------------------------------------------------------
 
@@ -364,6 +442,76 @@ class SpendoFinancialRepository(
     fun getCategorySpendTotals(): Flow<List<CategorySpending>> {
         val startOfMonth = getStartOfMonthEpoch()
         return transactionDao.getCategorySpendTotals(startOfMonth)
+    }
+
+    suspend fun getSpendingComparison(now: Long = System.currentTimeMillis()): Pair<Long, Long> {
+        val cal = Calendar.getInstance().apply { timeInMillis = now }
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        val startOfThisMonth = cal.timeInMillis
+
+        cal.add(Calendar.MONTH, -1)
+        val startOfLastMonth = cal.timeInMillis
+        val daysInCurrentMonth = Calendar.getInstance().apply { timeInMillis = now }.get(Calendar.DAY_OF_MONTH)
+        cal.set(Calendar.DAY_OF_MONTH, daysInCurrentMonth)
+        val endOfEquivalentLastMonth = cal.timeInMillis
+
+        val thisMonthDebits = transactionDao.getDebitsInDateRangeDirect(startOfThisMonth, now)
+        val lastMonthDebits = transactionDao.getDebitsInDateRangeDirect(startOfLastMonth, endOfEquivalentLastMonth)
+        return Pair(thisMonthDebits, lastMonthDebits)
+    }
+
+    suspend fun evaluateAffordability(
+        itemAmountPaise: Long,
+        totalBalancePaise: Long,
+        monthlyLimitPaise: Long,
+        monthlySpentPaise: Long
+    ): AffordabilityEvaluation {
+        val billsPaise = try {
+            database.commitmentDao().sumActiveCommitmentsDirect()
+        } catch (_: Exception) {
+            0L
+        }
+        val plannedSavingsPaise = 2500000L // ₹25,000.00 planned savings reserve
+
+        val freeDiscretionaryPaise = (totalBalancePaise - billsPaise - plannedSavingsPaise).coerceAtLeast(0L)
+        val monthlyRemainingPaise = (monthlyLimitPaise - monthlySpentPaise).coerceAtLeast(0L)
+
+        val verdict = when {
+            itemAmountPaise <= freeDiscretionaryPaise && itemAmountPaise <= monthlyRemainingPaise -> {
+                AffordabilityVerdict.AFFORDABLE
+            }
+            itemAmountPaise <= (totalBalancePaise - billsPaise) -> {
+                AffordabilityVerdict.CAUTION
+            }
+            else -> {
+                AffordabilityVerdict.RISKY
+            }
+        }
+
+        val reasonText = when (verdict) {
+            AffordabilityVerdict.AFFORDABLE ->
+                "Comfortably affordable. Fits within your free cash (₹%,.2f) and remaining monthly ceiling (₹%,.2f)."
+                    .format(Locale.ENGLISH, freeDiscretionaryPaise / 100.0, monthlyRemainingPaise / 100.0)
+            AffordabilityVerdict.CAUTION ->
+                "Proceed with caution. You have liquid funds, but this purchase exceeds your free cash or dips into planned savings."
+            AffordabilityVerdict.RISKY ->
+                "Risky purchase. Endangers upcoming essential commitments (₹%,.2f) or exceeds available liquid balances."
+                    .format(Locale.ENGLISH, billsPaise / 100.0)
+        }
+
+        return AffordabilityEvaluation(
+            itemAmountPaise = itemAmountPaise,
+            liquidBalancePaise = totalBalancePaise,
+            upcomingBillsPaise = billsPaise,
+            plannedSavingsPaise = plannedSavingsPaise,
+            freeDiscretionaryPaise = freeDiscretionaryPaise,
+            monthlyRemainingPaise = monthlyRemainingPaise,
+            verdict = verdict,
+            reasonText = reasonText
+        )
     }
 
     // -------------------------------------------------------------
@@ -528,8 +676,12 @@ class SpendoFinancialRepository(
         return appPreferenceDao.getPreference(key).map { it?.value }
     }
 
-    suspend fun setPreference(key: String, value: String) {
+    override suspend fun setPreference(key: String, value: String) {
         appPreferenceDao.setPreference(AppPreferenceEntity(key = key, value = value))
+    }
+
+    override suspend fun getPreferenceDirect(key: String): String? {
+        return appPreferenceDao.getPreferenceValueDirect(key)
     }
 
     // -------------------------------------------------------------
@@ -558,6 +710,13 @@ class SpendoFinancialRepository(
         )
     }
 
+    suspend fun importTransactionsFromCsv(inputStream: java.io.InputStream): Int {
+        val entities = com.spendwise.android.util.CsvImporter.parseCsv(inputStream)
+        if (entities.isEmpty()) return 0
+        transactionDao.insertTransactions(entities)
+        return entities.size
+    }
+
     // -------------------------------------------------------------
     // Seed Data Helper
     // -------------------------------------------------------------
@@ -582,9 +741,9 @@ class SpendoFinancialRepository(
         if (bankAccountDao.getBankAccountCount() == 0) {
             val now = System.currentTimeMillis()
             val defaultBanks = listOf(
-                BankAccountEntity("bank_1", "HDFC Bank", "Salary Account", "•••• 4892", 8452000L, 8452000L, true, now, now),
-                BankAccountEntity("bank_2", "ICICI Bank", "Savings & Investments", "•••• 1920", 14200000L, 14200000L, false, now, now),
-                BankAccountEntity("bank_3", "State Bank of India", "Emergency Reserve", "•••• 7731", 5000000L, 5000000L, false, now, now)
+                BankAccountEntity("bank_1", "Indian Bank", "Salary Account", "•••• 4892", 5240000L, 5240000L, true, now, now),
+                BankAccountEntity("bank_2", "Kotak Mahindra Bank", "Smart Savings", "•••• 1920", 2850050L, 2850050L, false, now, now),
+                BankAccountEntity("bank_3", "Karur Vysya Bank", "Branch Account (KVB)", "•••• 7731", 1520000L, 1520000L, false, now, now)
             )
             bankAccountDao.insertBankAccounts(defaultBanks)
         }
@@ -668,7 +827,9 @@ fun TransactionEntity.toSpendoTransaction(): SpendoTransaction {
         occurredAtEpochMs = occurredAtEpochMillis,
         bankAccountName = bankAccountName ?: "Primary Bank",
         source = txSource,
-        note = note
+        note = note,
+        reviewStatus = reviewStatus,
+        reviewReason = note
     )
 }
 

@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SpendWise"
+rootProject.name = "Spendo"
 include(":app")

@@ -101,7 +101,7 @@ fun SpendoAddTransactionScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(if (isSelected) SpendoColor.SurfaceDark else androidx.compose.ui.graphics.Color.Transparent)
+                            .background(if (isSelected) SpendoColor.TextPrimary else androidx.compose.ui.graphics.Color.Transparent)
                             .clickable {
                                 transactionType = type
                                 selectedCategory = if (type == TransactionType.EXPENSE) expenseCategories.first() else incomeCategories.first()
@@ -115,7 +115,7 @@ fun SpendoAddTransactionScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
                             letterSpacing = 1.sp,
-                            color = if (isSelected) SpendoColor.TextInverse else SpendoColor.TextSecondary
+                            color = if (isSelected) SpendoColor.Background else SpendoColor.TextSecondary
                         )
                     }
                 }
@@ -221,15 +221,16 @@ fun SpendoAddTransactionScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         activeCategories.forEach { category ->
+                            val isSelected = selectedCategory == category
                             FilterChip(
-                                selected = selectedCategory == category,
+                                selected = isSelected,
                                 onClick = { selectedCategory = category },
                                 label = { Text(category, fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
                                 shape = RoundedCornerShape(20.dp),
-                                border = BorderStroke(1.dp, SpendoColor.Divider),
+                                border = BorderStroke(1.dp, if (isSelected) SpendoColor.TextPrimary else SpendoColor.Divider),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = SpendoColor.SurfaceDark,
-                                    selectedLabelColor = SpendoColor.TextInverse,
+                                    selectedContainerColor = SpendoColor.TextPrimary,
+                                    selectedLabelColor = SpendoColor.Background,
                                     containerColor = SpendoColor.Surface,
                                     labelColor = SpendoColor.TextSecondary
                                 )
@@ -251,15 +252,16 @@ fun SpendoAddTransactionScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         banks.forEach { bank ->
+                            val isSelected = selectedBankName == bank.bankName
                             FilterChip(
-                                selected = selectedBankName == bank.bankName,
+                                selected = isSelected,
                                 onClick = { selectedBankName = bank.bankName },
                                 label = { Text("${bank.bankName} (${bank.maskedAccountNumber})", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
                                 shape = RoundedCornerShape(20.dp),
-                                border = BorderStroke(1.dp, SpendoColor.Divider),
+                                border = BorderStroke(1.dp, if (isSelected) SpendoColor.TextPrimary else SpendoColor.Divider),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = SpendoColor.SurfaceDark,
-                                    selectedLabelColor = SpendoColor.TextInverse,
+                                    selectedContainerColor = SpendoColor.TextPrimary,
+                                    selectedLabelColor = SpendoColor.Background,
                                     containerColor = SpendoColor.Surface,
                                     labelColor = SpendoColor.TextSecondary
                                 )

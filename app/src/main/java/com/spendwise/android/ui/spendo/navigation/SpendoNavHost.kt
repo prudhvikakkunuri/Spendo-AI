@@ -18,11 +18,13 @@ import com.spendwise.android.ui.spendo.screens.SpendoAnalyticsScreen
 import com.spendwise.android.ui.spendo.screens.SpendoBanksScreen
 import com.spendwise.android.ui.spendo.screens.SpendoBudgetScreen
 import com.spendwise.android.ui.spendo.screens.SpendoCalendarScreen
+import com.spendwise.android.ui.spendo.screens.SpendoChangePasswordScreen
 import com.spendwise.android.ui.spendo.screens.SpendoHomeScreen
 import com.spendwise.android.ui.spendo.screens.SpendoImportExportScreen
 import com.spendwise.android.ui.spendo.screens.SpendoIncomeScreen
 import com.spendwise.android.ui.spendo.screens.SpendoNotificationScreen
 import com.spendwise.android.ui.spendo.screens.SpendoNotificationSettingsScreen
+import com.spendwise.android.ui.spendo.screens.SpendoReviewScreen
 import com.spendwise.android.ui.spendo.screens.SpendoSecurityScreen
 import com.spendwise.android.ui.spendo.screens.SpendoSettingsScreen
 import com.spendwise.android.ui.spendo.screens.SpendoStreaksScreen
@@ -53,7 +55,8 @@ fun SpendoNavHost(
                 onNavigateToTransactionDetail = { id ->
                     navController.navigate(SpendoScreen.TransactionDetail.createRoute(id))
                 },
-                onNavigateToActivity = { navController.navigate(SpendoScreen.Activity.route) }
+                onNavigateToActivity = { navController.navigate(SpendoScreen.Activity.route) },
+                onNavigateToReview = { navController.navigate(SpendoScreen.Review.route) }
             )
         }
 
@@ -88,7 +91,8 @@ fun SpendoNavHost(
                 uiState = uiState,
                 onCategorySelected = { viewModel.setNotificationCategory(it) },
                 onClearAll = { viewModel.clearAllNotifications() },
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToReview = { navController.navigate(SpendoScreen.Review.route) }
             )
         }
 
@@ -131,7 +135,8 @@ fun SpendoNavHost(
         composable(SpendoScreen.Analytics.route) {
             SpendoAnalyticsScreen(
                 uiState = uiState,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onEvaluateAffordability = { viewModel.evaluateAffordability(it) }
             )
         }
 
@@ -140,7 +145,9 @@ fun SpendoNavHost(
             SpendoBanksScreen(
                 uiState = uiState,
                 onToggleUnlockDialog = { viewModel.toggleUnlockDialog(it) },
-                onUnlockBalances = { viewModel.unlockBalances() },
+                onVerifyAndUnlock = { password, onSuccess, onError ->
+                    viewModel.verifyAndUnlockBalances(password, onSuccess, onError)
+                },
                 onHideBalances = { viewModel.hideBalances() },
                 onAddBank = { name, type, initial -> viewModel.addBank(name, type, initial) },
                 onNavigateBack = { navController.popBackStack() }
@@ -170,7 +177,9 @@ fun SpendoNavHost(
                 uiState = uiState,
                 onInputChange = { viewModel.setChatInput(it) },
                 onSendMessage = { viewModel.sendChatMessage(it) },
-                onNavigateToAiConfig = { navController.navigate(SpendoScreen.AiConfig.route) }
+                onNavigateToAiConfig = { navController.navigate(SpendoScreen.AiConfig.route) },
+                onConfirmExpense = { pending, msgId -> viewModel.confirmPendingExpense(pending, msgId) },
+                onDismissExpense = { msgId -> viewModel.dismissPendingExpense(msgId) }
             )
         }
 
@@ -201,13 +210,16 @@ fun SpendoNavHost(
         composable(SpendoScreen.ImportExport.route) {
             SpendoImportExportScreen(
                 totalTransactionsCount = uiState.transactions.size,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onImportCsv = { stream, onDone -> viewModel.importCsv(stream, onDone) }
             )
         }
 
         // SCREEN 16 — SETTINGS
         composable(SpendoScreen.Settings.route) {
             SpendoSettingsScreen(
+                currentThemeMode = uiState.themeMode,
+                onThemeModeChange = { viewModel.setThemeMode(it) },
                 onNavigateToSecurity = { navController.navigate(SpendoScreen.Security.route) },
                 onNavigateToBanks = { navController.navigate(SpendoScreen.Banks.route) },
                 onNavigateToBudgets = { navController.navigate(SpendoScreen.Budget.route) },
@@ -227,7 +239,32 @@ fun SpendoNavHost(
                 onToggleBiometric = { viewModel.setBiometricEnabled(it) },
                 onAutoLockChange = { viewModel.setAutoLockDuration(it) },
                 onToggleBalanceConceal = { viewModel.setBalanceConcealProtected(it) },
+                onNavigateToChangePassword = { navController.navigate(SpendoScreen.ChangePassword.route) },
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // SCREEN 17b — CHANGE PASSWORD SCREEN
+        composable(SpendoScreen.ChangePassword.route) {
+            SpendoChangePasswordScreen(
+                hasCustomPassword = uiState.hasCustomPassword,
+                onChangePassword = { current, newPass ->
+                    viewModel.changePassword(current, newPass)
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // SCREEN 18 — REVIEW / VERIFICATION DESK
+        composable(SpendoScreen.Review.route) {
+            SpendoReviewScreen(
+                uiState = uiState,
+                onNavigateBack = { navController.popBackStack() },
+                onApprove = { id -> viewModel.approveReviewTransaction(id) },
+                onReject = { id -> viewModel.rejectReviewTransaction(id) },
+                onUpdateAndApprove = { id, merchant, amountPaise, category, bank, rememberPref ->
+                    viewModel.updateAndApproveReviewTransaction(id, merchant, amountPaise, category, bank, rememberPref)
+                }
             )
         }
     }

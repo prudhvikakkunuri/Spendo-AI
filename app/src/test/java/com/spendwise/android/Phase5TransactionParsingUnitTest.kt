@@ -584,5 +584,11 @@ class Phase5TransactionParsingUnitTest {
 
         override fun getTransactionsForBank(bankAccountName: String): Flow<List<TransactionEntity>> =
             flowOf(transactions.filter { it.bankAccountName == bankAccountName || it.bankAccountId == bankAccountName })
+
+        override fun getTransactionsForMerchant(merchantQuery: String): Flow<List<TransactionEntity>> =
+            flowOf(transactions.filter { it.merchant?.contains(merchantQuery, ignoreCase = true) == true })
+
+        override suspend fun getMerchantTotalSpendDirect(merchantQuery: String): Long =
+            transactions.filter { it.merchant?.contains(merchantQuery, ignoreCase = true) == true && it.direction == "DEBIT" && it.reviewStatus == "CONFIRMED" }.sumOf { it.amountPaise }
     }
 }

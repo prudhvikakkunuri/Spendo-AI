@@ -33,6 +33,9 @@ interface CommitmentDao {
     @Delete
     suspend fun delete(commitment: CommitmentEntity)
 
+    @Query("SELECT COALESCE(SUM(amount_paise), 0) FROM commitments WHERE is_paid = 0")
+    suspend fun sumActiveCommitmentsDirect(): Long
+
     @Query("DELETE FROM commitments")
     suspend fun clear()
 }

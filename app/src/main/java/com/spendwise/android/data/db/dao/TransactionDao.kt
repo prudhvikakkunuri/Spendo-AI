@@ -170,4 +170,10 @@ interface TransactionDao {
 
     @Query("SELECT * FROM transactions WHERE bankAccountName = :bankAccountName OR bankAccountId = :bankAccountName ORDER BY occurredAtEpochMillis DESC")
     fun getTransactionsForBank(bankAccountName: String): Flow<List<TransactionEntity>>
+
+    @Query("SELECT * FROM transactions WHERE merchant LIKE '%' || :merchantQuery || '%' ORDER BY occurredAtEpochMillis DESC")
+    fun getTransactionsForMerchant(merchantQuery: String): Flow<List<TransactionEntity>>
+
+    @Query("SELECT COALESCE(SUM(amountPaise), 0) FROM transactions WHERE merchant LIKE '%' || :merchantQuery || '%' AND direction = 'DEBIT' AND reviewStatus = 'CONFIRMED'")
+    suspend fun getMerchantTotalSpendDirect(merchantQuery: String): Long
 }

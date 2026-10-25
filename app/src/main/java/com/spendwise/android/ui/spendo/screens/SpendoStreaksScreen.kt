@@ -118,32 +118,32 @@ fun SpendoStreaksScreen(
                                 text = "Current Streak Active",
                                 indicatorColor = SpendoColor.SuccessGreen,
                                 containerColor = SpendoColor.DarkCardContainer,
-                                textColor = SpendoColor.TextInverse
+                                textColor = SpendoColor.CardDarkText
                             )
                             Text(
                                 text = "BEST: 14 DAYS",
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = SpendoColor.TextInverse
+                                color = SpendoColor.CardDarkText
                             )
                         }
 
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            DotMatrixText(text = "Consecutive Safe Days", fontSize = 11.sp, color = SpendoColor.TextInverseMuted)
+                            DotMatrixText(text = "Consecutive Safe Days", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
                             Text(
                                 text = "${uiState.currentStreakDays} DAYS",
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 36.sp,
-                                color = SpendoColor.TextInverse
+                                color = SpendoColor.CardDarkText
                             )
                         }
 
                         Text(
                             text = "Every day within your daily ceiling compounds into greater financial peace.",
                             fontSize = 13.sp,
-                            color = SpendoColor.TextInverseMuted
+                            color = SpendoColor.CardDarkTextSecondary
                         )
 
                         // 7-day Weekly Grid Indicator
@@ -172,7 +172,7 @@ fun SpendoStreaksScreen(
                                             Icon(
                                                 imageVector = Icons.Outlined.Check,
                                                 contentDescription = null,
-                                                tint = SpendoColor.SurfaceDark,
+                                                tint = androidx.compose.ui.graphics.Color.Black,
                                                 modifier = Modifier.size(14.dp)
                                             )
                                         }
@@ -181,7 +181,7 @@ fun SpendoStreaksScreen(
                                         text = day,
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = 10.sp,
-                                        color = SpendoColor.TextSecondary
+                                        color = SpendoColor.CardDarkTextSecondary
                                     )
                                 }
                             }

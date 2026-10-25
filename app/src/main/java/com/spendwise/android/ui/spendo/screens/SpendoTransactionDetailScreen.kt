@@ -107,7 +107,7 @@ fun SpendoTransactionDetailScreen(
                             text = if (transaction.type == TransactionType.INCOME) "Income Credited" else "Expense Debited",
                             indicatorColor = if (transaction.type == TransactionType.INCOME) SpendoColor.SuccessGreen else SpendoColor.AccentRed,
                             containerColor = Color(0xFF262626),
-                            textColor = SpendoColor.TextInverse
+                            textColor = SpendoColor.CardDarkText
                         )
 
                         Text(
@@ -115,14 +115,14 @@ fun SpendoTransactionDetailScreen(
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             fontSize = 34.sp,
-                            color = SpendoColor.TextInverse
+                            color = SpendoColor.CardDarkText
                         )
 
                         Text(
                             text = transaction.merchant,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = SpendoColor.TextInverse
+                            color = SpendoColor.CardDarkText
                         )
                     }
                 }

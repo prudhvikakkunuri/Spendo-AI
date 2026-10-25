@@ -59,8 +59,8 @@ fun SpendoDarkCard(
     SpendoCard(
         modifier = modifier,
         shape = shape,
-        backgroundColor = SpendoColor.SurfaceDark,
-        borderColor = SpendoColor.BorderDark,
+        backgroundColor = SpendoColor.CardDark,
+        borderColor = SpendoColor.CardDarkBorder,
         contentPadding = contentPadding,
         onClick = onClick,
         content = content

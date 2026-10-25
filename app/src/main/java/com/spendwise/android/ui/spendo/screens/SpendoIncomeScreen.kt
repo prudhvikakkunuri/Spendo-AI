@@ -77,25 +77,25 @@ fun SpendoIncomeScreen(
                                 text = "Next Payday",
                                 indicatorColor = SpendoColor.SuccessGreen,
                                 containerColor = androidx.compose.ui.graphics.Color(0xFF262626),
-                                textColor = SpendoColor.TextInverse
+                                textColor = SpendoColor.CardDarkText
                             )
                             Text(
                                 text = "01 NOV 2026",
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = SpendoColor.TextInverse
+                                color = SpendoColor.CardDarkText
                             )
                         }
 
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            DotMatrixText(text = "Total Monthly Inflow", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+                            DotMatrixText(text = "Total Monthly Inflow", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
                             Text(
                                 text = "₹%,.2f".format(totalIncomePaise / 100.0),
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 32.sp,
-                                color = SpendoColor.TextInverse
+                                color = SpendoColor.CardDarkText
                             )
                         }
 

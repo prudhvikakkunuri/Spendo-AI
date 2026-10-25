@@ -21,13 +21,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,8 +49,10 @@ import com.spendwise.android.ui.spendo.components.DotMatrixText
 import com.spendwise.android.ui.spendo.components.SpendoCard
 import com.spendwise.android.ui.spendo.components.SpendoDarkCard
 import com.spendwise.android.ui.spendo.components.SpendoOutlinedButton
-import com.spendwise.android.ui.spendo.components.SpendoPrimaryButton
+import com.spendwise.android.ui.spendo.components.SpendoPasswordField
+import com.spendwise.android.ui.spendo.components.SpendoTextField
 import com.spendwise.android.ui.spendo.components.SpendoTopBar
+import com.spendwise.android.ui.spendo.model.BalanceSource
 import com.spendwise.android.ui.spendo.model.SpendoBank
 import com.spendwise.android.ui.spendo.model.SpendoUiState
 import com.spendwise.android.ui.spendo.theme.SpendoColor
@@ -59,7 +61,7 @@ import com.spendwise.android.ui.spendo.theme.SpendoColor
 fun SpendoBanksScreen(
     uiState: SpendoUiState,
     onToggleUnlockDialog: (Boolean) -> Unit,
-    onUnlockBalances: () -> Unit,
+    onVerifyAndUnlock: (password: String, onSuccess: () -> Unit, onError: () -> Unit) -> Unit,
     onHideBalances: () -> Unit,
     onAddBank: (name: String, type: String, initialPaise: Long) -> Unit,
     onNavigateBack: () -> Unit,
@@ -87,8 +89,8 @@ fun SpendoBanksScreen(
                     }
                 ) {
                     Icon(
-                        imageVector = if (uiState.isBalancesRevealed) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
-                        contentDescription = "Toggle Balance Privacy",
+                        imageVector = if (uiState.isBalancesRevealed) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                        contentDescription = if (uiState.isBalancesRevealed) "Conceal Balances" else "Reveal Balances",
                         tint = if (uiState.isBalancesRevealed) SpendoColor.AccentRed else SpendoColor.TextPrimary
                     )
                 }
@@ -151,34 +153,71 @@ fun SpendoBanksScreen(
                                 text = "${uiState.banks.size} Linked Accounts",
                                 indicatorColor = SpendoColor.SuccessGreen,
                                 containerColor = SpendoColor.DarkCardContainer,
-                                textColor = SpendoColor.TextInverse
+                                textColor = SpendoColor.CardDarkText
                             )
-                            Text(
-                                text = if (uiState.isBalancesRevealed) "UNLOCKED" else "CONCEALED",
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (uiState.isBalancesRevealed) SpendoColor.SuccessGreen else SpendoColor.AccentRed
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        if (uiState.isBalancesRevealed) {
+                                            onHideBalances()
+                                        } else {
+                                            onToggleUnlockDialog(true)
+                                        }
+                                    }
+                                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (uiState.isBalancesRevealed) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                                    contentDescription = if (uiState.isBalancesRevealed) "Conceal" else "Unlock",
+                                    tint = if (uiState.isBalancesRevealed) SpendoColor.SuccessGreen else SpendoColor.CardDarkTextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = if (uiState.isBalancesRevealed) "UNLOCKED" else "CONCEALED",
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (uiState.isBalancesRevealed) SpendoColor.SuccessGreen else SpendoColor.CardDarkTextSecondary
+                                )
+                            }
                         }
 
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            DotMatrixText(text = "Aggregated Balance", fontSize = 11.sp, color = SpendoColor.TextInverseMuted)
+                            DotMatrixText(
+                                text = "Aggregated Balance • Locally Tracked Estimate",
+                                fontSize = 10.sp,
+                                color = SpendoColor.CardDarkTextSecondary
+                            )
                             if (uiState.isBalancesRevealed) {
                                 DotMatrixAmount(
                                     amountText = "%,.2f".format(totalBalancePaise / 100.0),
                                     fontSize = 32.sp,
-                                    color = SpendoColor.TextInverse
+                                    color = SpendoColor.CardDarkText
                                 )
                             } else {
-                                Text(
-                                    text = "₹ • • • • • •",
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 28.sp,
-                                    letterSpacing = 2.sp,
-                                    color = SpendoColor.TextInverse
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.clickable { onToggleUnlockDialog(true) }
+                                ) {
+                                    Text(
+                                        text = "₹ • • • • • •",
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 28.sp,
+                                        letterSpacing = 2.sp,
+                                        color = SpendoColor.CardDarkText
+                                    )
+                                    Text(
+                                        text = "Tap eye to reveal",
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 10.sp,
+                                        color = SpendoColor.CardDarkTextSecondary
+                                    )
+                                }
                             }
                         }
                     }
@@ -188,60 +227,146 @@ fun SpendoBanksScreen(
             // Bank Accounts List
             items(uiState.banks, key = { it.id }) { bank ->
                 SpendoCard(contentPadding = 18.dp) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .background(SpendoColor.SurfaceDark),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.AccountBalance,
-                                    contentDescription = null,
-                                    tint = SpendoColor.TextInverse,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(SpendoColor.SurfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.AccountBalance,
+                                        contentDescription = null,
+                                        tint = SpendoColor.TextPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = bank.bankName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SpendoColor.TextPrimary
+                                    )
+                                    Text(
+                                        text = "${bank.accountType} • ${bank.maskedAccountNumber}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = SpendoColor.TextSecondary
+                                    )
+                                }
                             }
 
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    text = bank.bankName,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SpendoColor.TextPrimary
-                                )
-                                Text(
-                                    text = "${bank.accountType} • ${bank.maskedAccountNumber}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = SpendoColor.TextSecondary
-                                )
+                            Column(horizontalAlignment = Alignment.End) {
+                                if (uiState.isBalancesRevealed) {
+                                    Text(
+                                        text = bank.formattedBalance,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = SpendoColor.TextPrimary
+                                    )
+                                } else {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.clickable { onToggleUnlockDialog(true) }
+                                    ) {
+                                        Text(
+                                            text = "₹••••••",
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
+                                            letterSpacing = 1.sp,
+                                            color = SpendoColor.TextMuted
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Outlined.VisibilityOff,
+                                            contentDescription = "Hidden",
+                                            tint = SpendoColor.TextMuted,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                if (bank.isPrimary) {
+                                    Text(
+                                        text = "PRIMARY",
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SpendoColor.AccentRed
+                                    )
+                                }
                             }
                         }
 
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = if (uiState.isBalancesRevealed) bank.formattedBalance else "₹••••••",
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = SpendoColor.TextPrimary
-                            )
-                            if (bank.isPrimary) {
+                        // Divider & Meta Readouts (Source, Last Updated, Recent Activity)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(SpendoColor.Divider)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            when (bank.balanceSource) {
+                                                BalanceSource.REPORTED -> SpendoColor.SuccessGreenSubtle
+                                                BalanceSource.CALCULATED -> SpendoColor.SurfaceVariant
+                                                BalanceSource.ESTIMATED -> SpendoColor.AccentRedSubtle
+                                            }
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = bank.balanceSource.name,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = when (bank.balanceSource) {
+                                            BalanceSource.REPORTED -> SpendoColor.SuccessGreen
+                                            BalanceSource.CALCULATED -> SpendoColor.TextSecondary
+                                            BalanceSource.ESTIMATED -> SpendoColor.AccentRed
+                                        }
+                                    )
+                                }
+
                                 Text(
-                                    text = "PRIMARY",
+                                    text = bank.lastUpdatedText,
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SpendoColor.AccentRed
+                                    color = SpendoColor.TextMuted
+                                )
+                            }
+
+                            bank.recentTransactionSummary?.let { summary ->
+                                Text(
+                                    text = summary,
+                                    fontSize = 11.sp,
+                                    color = SpendoColor.TextSecondary,
+                                    fontFamily = FontFamily.Monospace
                                 )
                             }
                         }
@@ -267,58 +392,91 @@ fun SpendoBanksScreen(
         }
     }
 
-    // Mock Unlock Balances Dialog (Biometric / PIN prompt)
+    // Password Verification Dialog to Reveal Balances
     if (uiState.showUnlockDialog) {
-        var pinInput by remember { mutableStateOf("") }
-        var isPinError by remember { mutableStateOf(false) }
+        var passwordInput by remember { mutableStateOf("") }
+        var errorMessage by remember { mutableStateOf<String?>(null) }
+        var isVerifying by remember { mutableStateOf(false) }
 
         AlertDialog(
-            onDismissRequest = { onToggleUnlockDialog(false) },
+            onDismissRequest = {
+                onToggleUnlockDialog(false)
+            },
             title = {
-                Text("Unlock Balances", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Lock,
+                        contentDescription = null,
+                        tint = SpendoColor.AccentRed,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        "Reveal Bank Balances",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        color = SpendoColor.TextPrimary,
+                        fontSize = 18.sp
+                    )
+                }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Enter your 4-digit Spendo security PIN or confirm biometrics to reveal concealed balances.",
+                        text = "Enter your Spendo app password or PIN to unlock sensitive account balances for this session.",
                         fontSize = 13.sp,
-                        color = SpendoColor.TextSecondary
+                        color = SpendoColor.TextSecondary,
+                        lineHeight = 18.sp
                     )
-                    OutlinedTextField(
-                        value = pinInput,
+                    SpendoPasswordField(
+                        value = passwordInput,
                         onValueChange = {
-                            if (it.length <= 4) {
-                                pinInput = it
-                                isPinError = false
-                            }
+                            passwordInput = it
+                            errorMessage = null
                         },
-                        label = { Text("4-digit PIN") },
-                        placeholder = { Text("Default: 4892") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        singleLine = true,
-                        isError = isPinError,
-                        modifier = Modifier.fillMaxWidth()
+                        label = "App Security Password / PIN",
+                        placeholder = if (uiState.hasCustomPassword) "Enter password" else "Default PIN: 4892",
+                        isError = errorMessage != null,
+                        errorMessage = errorMessage
                     )
-                    if (isPinError) {
-                        Text("Incorrect PIN. Try 4892.", fontSize = 11.sp, color = SpendoColor.AccentRed)
-                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (pinInput == "4892" || pinInput == uiState.appPin || pinInput.length == 4) {
-                            onUnlockBalances()
-                        } else {
-                            isPinError = true
+                        if (passwordInput.isBlank()) {
+                            errorMessage = "Password cannot be empty"
+                            return@TextButton
                         }
-                    }
+                        isVerifying = true
+                        onVerifyAndUnlock(
+                            passwordInput,
+                            {
+                                isVerifying = false
+                                onToggleUnlockDialog(false)
+                            },
+                            {
+                                isVerifying = false
+                                errorMessage = "Incorrect password. Please try again."
+                            }
+                        )
+                    },
+                    enabled = !isVerifying
                 ) {
-                    Text("Unlock", color = SpendoColor.TextPrimary, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (isVerifying) "Verifying..." else "Unlock Balances",
+                        color = SpendoColor.TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             },
             dismissButton = {
-                TextButton(onClick = { onToggleUnlockDialog(false) }) {
+                TextButton(
+                    onClick = { onToggleUnlockDialog(false) },
+                    enabled = !isVerifying
+                ) {
                     Text("Cancel", color = SpendoColor.TextSecondary)
                 }
             },
@@ -336,31 +494,34 @@ fun SpendoBanksScreen(
         AlertDialog(
             onDismissRequest = { showAddBankDialog = false },
             title = {
-                Text("Add Bank Account", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                Text(
+                    "Add Bank Account",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = SpendoColor.TextPrimary,
+                    fontSize = 18.sp
+                )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SpendoTextField(
                         value = bankNameInput,
                         onValueChange = { bankNameInput = it },
-                        label = { Text("Bank Name (e.g. Axis, Kotak)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = "Bank Name",
+                        placeholder = "e.g. HDFC, SBI, ICICI, Axis"
                     )
-                    OutlinedTextField(
+                    SpendoTextField(
                         value = accountTypeInput,
                         onValueChange = { accountTypeInput = it },
-                        label = { Text("Account Type") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = "Account Type",
+                        placeholder = "Savings / Current / Credit Card"
                     )
-                    OutlinedTextField(
+                    SpendoTextField(
                         value = initialBalanceInput,
                         onValueChange = { initialBalanceInput = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("Initial Balance in ₹") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = "Initial Balance in ₹",
+                        placeholder = "e.g. 25000",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                 }
             },
@@ -374,7 +535,7 @@ fun SpendoBanksScreen(
                         }
                     }
                 ) {
-                    Text("Add", color = SpendoColor.TextPrimary, fontWeight = FontWeight.Bold)
+                    Text("Add Account", color = SpendoColor.TextPrimary, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

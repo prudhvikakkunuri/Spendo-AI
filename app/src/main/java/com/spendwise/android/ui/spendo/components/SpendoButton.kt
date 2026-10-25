@@ -31,21 +31,25 @@ fun SpendoPrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    height: Dp = 52.dp,
-    containerColor: Color = SpendoColor.SurfaceDark,
-    contentColor: Color = SpendoColor.TextInverse,
+    height: Dp = 50.dp,
+    containerColor: Color? = null,
+    contentColor: Color? = null,
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
+    val isDark = com.spendwise.android.ui.spendo.theme.LocalSpendoColors.current.isDark
+    val actualBg = containerColor ?: if (isDark) Color(0xFFEDEDED) else Color(0xFF111111)
+    val actualFg = contentColor ?: if (isDark) Color(0xFF000000) else Color(0xFFFFFFFF)
+
     Button(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .height(height),
         enabled = enabled,
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(25.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            contentColor = contentColor,
+            containerColor = actualBg,
+            contentColor = actualFg,
             disabledContainerColor = SpendoColor.Divider,
             disabledContentColor = SpendoColor.TextMuted
         ),
@@ -59,7 +63,7 @@ fun SpendoPrimaryButton(
             Text(
                 text = text,
                 fontFamily = FontFamily.SansSerif,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 letterSpacing = 0.3.sp
             )
@@ -68,7 +72,7 @@ fun SpendoPrimaryButton(
 }
 
 /**
- * Secondary outlined button with crisp thin 1px border.
+ * Secondary outlined button with crisp 1px hairline border.
  */
 @Composable
 fun SpendoOutlinedButton(
@@ -76,8 +80,8 @@ fun SpendoOutlinedButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    height: Dp = 48.dp,
-    borderColor: Color = SpendoColor.Divider,
+    height: Dp = 46.dp,
+    borderColor: Color = SpendoColor.BorderSubtle,
     contentColor: Color = SpendoColor.TextPrimary,
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
@@ -85,12 +89,13 @@ fun SpendoOutlinedButton(
         onClick = onClick,
         modifier = modifier.height(height),
         enabled = enabled,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(23.dp),
         border = BorderStroke(1.dp, borderColor),
         colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = contentColor
+            contentColor = contentColor,
+            disabledContentColor = SpendoColor.TextMuted
         ),
-        contentPadding = PaddingValues(horizontal = 20.dp)
+        contentPadding = PaddingValues(horizontal = 18.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

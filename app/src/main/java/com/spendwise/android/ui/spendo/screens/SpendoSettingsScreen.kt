@@ -46,8 +46,12 @@ import com.spendwise.android.ui.spendo.components.SpendoDarkCard
 import com.spendwise.android.ui.spendo.components.SpendoTopBar
 import com.spendwise.android.ui.spendo.theme.SpendoColor
 
+import com.spendwise.android.ui.spendo.theme.ThemeMode
+
 @Composable
 fun SpendoSettingsScreen(
+    currentThemeMode: ThemeMode = ThemeMode.SYSTEM,
+    onThemeModeChange: (ThemeMode) -> Unit = {},
     onNavigateToSecurity: () -> Unit,
     onNavigateToBanks: () -> Unit,
     onNavigateToBudgets: () -> Unit,
@@ -85,21 +89,85 @@ fun SpendoSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            DotMatrixText(text = "Spendo Mobile", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+                            DotMatrixText(text = "Spendo Mobile", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
                             Text(
                                 text = "Your Money. Your Agent.",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = SpendoColor.TextInverse
+                                color = SpendoColor.CardDarkText
                             )
                             Text(
                                 text = "Version 1.0.0 • Nothing Edition",
                                 fontSize = 12.sp,
-                                color = SpendoColor.TextSecondary
+                                color = SpendoColor.CardDarkTextSecondary
                             )
                         }
 
                         DotMatrixPattern(color = androidx.compose.ui.graphics.Color(0xFF333333))
+                    }
+                }
+            }
+
+            // Section: Appearance & Theme
+            item {
+                DotMatrixText(text = "Appearance & Interface", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+            }
+
+            item {
+                SpendoCard(contentPadding = 16.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Theme Mode",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = SpendoColor.TextPrimary
+                                )
+                                Text(
+                                    text = "Consistent monochrome styling across all screens",
+                                    fontSize = 12.sp,
+                                    color = SpendoColor.TextSecondary
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(SpendoColor.SurfaceVariant)
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf(
+                                ThemeMode.SYSTEM to "System",
+                                ThemeMode.LIGHT to "Light",
+                                ThemeMode.DARK to "Dark"
+                            ).forEach { (mode, label) ->
+                                val isSelected = currentThemeMode == mode
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(if (isSelected) SpendoColor.TextPrimary else androidx.compose.ui.graphics.Color.Transparent)
+                                        .clickable { onThemeModeChange(mode) }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) SpendoColor.Background else SpendoColor.TextSecondary
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

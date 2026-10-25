@@ -188,7 +188,7 @@ fun SpendoCalendarScreen(
                                                     .clip(CircleShape)
                                                     .background(
                                                         when {
-                                                            isSelected -> SpendoColor.SurfaceDark
+                                                            isSelected -> SpendoColor.TextPrimary
                                                             isToday -> SpendoColor.SurfaceVariant
                                                             else -> androidx.compose.ui.graphics.Color.Transparent
                                                         }
@@ -201,7 +201,7 @@ fun SpendoCalendarScreen(
                                                     text = dayNum.toString(),
                                                     fontSize = 13.sp,
                                                     fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                    color = if (isSelected) SpendoColor.TextInverse else SpendoColor.TextPrimary
+                                                    color = if (isSelected) SpendoColor.Background else SpendoColor.TextPrimary
                                                 )
                                                 if (hasSpend && !isSelected) {
                                                     Box(

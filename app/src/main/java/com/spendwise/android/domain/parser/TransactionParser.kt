@@ -92,13 +92,15 @@ class TransactionParser {
         // 10. Category classification
         val category = classifyCategory(lowerText, extractedMerchant, isRefundOrReversal)
 
-        // 11. Deduplication fingerprint
+        // 11. Deduplication fingerprint with reference number support
+        val refNumber = extractReferenceNumber(normalizedText)
         val fingerprint = computeFingerprint(
             payload.packageName,
             amountPaise ?: 0L,
             direction?.name ?: "UNKNOWN",
             extractedMerchant,
-            payload.postTimeEpochMs
+            payload.postTimeEpochMs,
+            refNumber
         )
 
         // 12. Evaluate Confidence & Review Reasons
@@ -213,7 +215,7 @@ class TransactionParser {
 
     private fun detectDirection(lowerText: String): TransactionDirection? {
         val debitKeywords = listOf(
-            "debited", "spent", "paid to", "sent to", "withdrawn", "payment of",
+            "debited", "spent", "paid to", "sent to", "sent ", "withdrawn", "payment of",
             "purchase of", "purchased at", "charged", "paid rs", "paid inr", "paid ₹",
             "transfer to", "transferred to"
         )
@@ -415,15 +417,34 @@ class TransactionParser {
         return TransactionCategory.OTHER
     }
 
+    private fun extractReferenceNumber(text: String): String? {
+        val patterns = listOf(
+            Pattern.compile("(?i)(?:upi\\s+ref(?:\\s+no)?|ref\\s+no|rrn|txn\\s+id|ref)\\s*[:.]?\\s*([A-Za-z0-9]{8,22})", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("(?i)(?:ref(?:\\s+is|:)?\\s*)([0-9]{8,18})", Pattern.CASE_INSENSITIVE)
+        )
+        for (p in patterns) {
+            val m = p.matcher(text)
+            if (m.find()) {
+                val ref = m.group(1)?.trim()
+                if (!ref.isNullOrBlank()) return ref
+            }
+        }
+        return null
+    }
+
     private fun computeFingerprint(
         sourcePackage: String,
         amountPaise: Long,
         direction: String,
         merchant: String?,
-        postTimeEpochMs: Long
+        postTimeEpochMs: Long,
+        refNumber: String?
     ): String {
+        if (!refNumber.isNullOrBlank()) {
+            return "REF:$sourcePackage:$amountPaise:$direction:$refNumber"
+        }
+
         val normalizedMerchant = merchant?.trim()?.lowercase(Locale.ROOT) ?: "none"
-        // Bucket timestamp to 5-minute window for robust deduplication
         val timeBucket = postTimeEpochMs / 300_000L
         val rawKey = "$sourcePackage|$amountPaise|$direction|$normalizedMerchant|$timeBucket"
 

@@ -21,7 +21,9 @@ data class SpendoTransaction(
     val occurredAtEpochMs: Long,
     val bankAccountName: String,
     val source: TransactionSource,
-    val note: String? = null
+    val note: String? = null,
+    val reviewStatus: String = "CONFIRMED",
+    val reviewReason: String? = null
 ) {
     val amountRupees: Double get() = amountPaise / 100.0
     val formattedAmount: String get() = "₹%,.2f".format(Locale.ENGLISH, amountRupees)
@@ -31,13 +33,22 @@ data class SpendoTransaction(
     }
 }
 
+enum class BalanceSource {
+    REPORTED,   // Direct bank snapshot from message/statement
+    CALCULATED, // Derived from opening balance + posted ledger transactions
+    ESTIMATED   // Incomplete transaction history
+}
+
 data class SpendoBank(
     val id: String,
     val bankName: String,
     val accountType: String,
     val maskedAccountNumber: String,
     val balancePaise: Long,
-    val isPrimary: Boolean = false
+    val isPrimary: Boolean = false,
+    val balanceSource: BalanceSource = BalanceSource.CALCULATED,
+    val lastUpdatedText: String = "Updated recently",
+    val recentTransactionSummary: String? = null
 ) {
     val balanceRupees: Double get() = balancePaise / 100.0
     val formattedBalance: String get() = "₹%,.2f".format(Locale.ENGLISH, balanceRupees)
@@ -71,12 +82,53 @@ data class SpendoStreakData(
     val motivationalQuote: String = "5 consecutive days within budget. Your financial discipline is sharp."
 )
 
+data class PendingExpenseConfirmation(
+    val amountPaise: Long,
+    val merchant: String,
+    val category: String,
+    val bankName: String
+) {
+    val formattedAmount: String get() = "₹%,.2f".format(Locale.ENGLISH, amountPaise / 100.0)
+}
+
+data class SpendoSavingsGoal(
+    val id: String,
+    val title: String,
+    val targetPaise: Long,
+    val savedPaise: Long,
+    val targetDateText: String = "Dec 2026",
+    val iconName: String = "SAVINGS"
+) {
+    val progress: Float get() = if (targetPaise > 0L) (savedPaise.toFloat() / targetPaise.toFloat()).coerceIn(0f, 1f) else 0f
+    val formattedTarget: String get() = "₹%,.2f".format(Locale.ENGLISH, targetPaise / 100.0)
+    val formattedSaved: String get() = "₹%,.2f".format(Locale.ENGLISH, savedPaise / 100.0)
+    val percentageText: String get() = "${(progress * 100).toInt()}%"
+}
+
+enum class AffordabilityVerdict {
+    AFFORDABLE,
+    CAUTION,
+    RISKY
+}
+
+data class AffordabilityEvaluation(
+    val itemAmountPaise: Long,
+    val liquidBalancePaise: Long,
+    val upcomingBillsPaise: Long,
+    val plannedSavingsPaise: Long,
+    val freeDiscretionaryPaise: Long,
+    val monthlyRemainingPaise: Long,
+    val verdict: AffordabilityVerdict,
+    val reasonText: String
+)
+
 data class SpendoChatMessage(
     val id: String,
     val sender: String, // "USER" or "SPENDO"
     val text: String,
     val timestamp: Long = System.currentTimeMillis(),
-    val isActionable: Boolean = false
+    val isActionable: Boolean = false,
+    val pendingExpense: PendingExpenseConfirmation? = null
 )
 
 enum class AiProvider(val displayName: String, val defaultModel: String) {
@@ -102,27 +154,36 @@ object SpendoMockRepository {
     val sampleBanks = listOf(
         SpendoBank(
             id = "bank_1",
-            bankName = "HDFC Bank",
+            bankName = "Indian Bank",
             accountType = "Salary Account",
             maskedAccountNumber = "•••• 4892",
-            balancePaise = 8452000L,
-            isPrimary = true
+            balancePaise = 5240000L,
+            isPrimary = true,
+            balanceSource = BalanceSource.REPORTED,
+            lastUpdatedText = "Reported from SMS (12m ago)",
+            recentTransactionSummary = "Last: Swiggy ₹450.00"
         ),
         SpendoBank(
             id = "bank_2",
-            bankName = "ICICI Bank",
-            accountType = "Savings & Investments",
+            bankName = "Kotak Mahindra Bank",
+            accountType = "Smart Savings",
             maskedAccountNumber = "•••• 1920",
-            balancePaise = 14200000L,
-            isPrimary = false
+            balancePaise = 2850050L,
+            isPrimary = false,
+            balanceSource = BalanceSource.CALCULATED,
+            lastUpdatedText = "Calculated from ledger",
+            recentTransactionSummary = "Last: Uber ₹420.00"
         ),
         SpendoBank(
             id = "bank_3",
-            bankName = "State Bank of India",
-            accountType = "Emergency Reserve",
+            bankName = "Karur Vysya Bank",
+            accountType = "Branch Account (KVB)",
             maskedAccountNumber = "•••• 7731",
-            balancePaise = 5000000L,
-            isPrimary = false
+            balancePaise = 1520000L,
+            isPrimary = false,
+            balanceSource = BalanceSource.CALCULATED,
+            lastUpdatedText = "Calculated from ledger",
+            recentTransactionSummary = "Last: ATM Cash ₹2,000"
         )
     )
 
@@ -267,6 +328,33 @@ object SpendoMockRepository {
             id = "msg_0",
             sender = "SPENDO",
             text = "Hello! I am Spendo, your local AI money agent. I analyze your spending velocity, monitor daily budget limits, and help you keep more of what you earn."
+        )
+    )
+
+    val sampleSavingsGoals = listOf(
+        SpendoSavingsGoal(
+            id = "goal_1",
+            title = "Emergency Reserve Fund",
+            targetPaise = 30000000L, // ₹3,00,000
+            savedPaise = 18500000L,  // ₹1,85,000
+            targetDateText = "31 Mar 2027",
+            iconName = "shield"
+        ),
+        SpendoSavingsGoal(
+            id = "goal_2",
+            title = "Nothing Phone (3) Upgrade",
+            targetPaise = 6500000L,  // ₹65,000
+            savedPaise = 4200000L,   // ₹42,000
+            targetDateText = "15 Jan 2027",
+            iconName = "device"
+        ),
+        SpendoSavingsGoal(
+            id = "goal_3",
+            title = "Japan Autumn Tour",
+            targetPaise = 20000000L, // ₹2,00,000
+            savedPaise = 6800000L,   // ₹68,000
+            targetDateText = "01 Oct 2027",
+            iconName = "flight"
         )
     )
 }

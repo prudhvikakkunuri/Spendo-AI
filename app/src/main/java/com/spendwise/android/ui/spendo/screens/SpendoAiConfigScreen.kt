@@ -97,17 +97,17 @@ fun SpendoAiConfigScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        DotMatrixText(text = "Agent Status", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+                        DotMatrixText(text = "Agent Status", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
                         Text(
                             text = if (aiConfig.isConfigured) "Configured & Active" else "Setup Required",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = SpendoColor.TextInverse
+                            color = SpendoColor.CardDarkText
                         )
                         Text(
                             text = if (aiConfig.isConfigured) "Provider: ${aiConfig.provider.displayName}" else "Select your LLM engine below.",
                             fontSize = 12.sp,
-                            color = SpendoColor.TextSecondary
+                            color = SpendoColor.CardDarkTextSecondary
                         )
                     }
 
@@ -145,10 +145,10 @@ fun SpendoAiConfigScreen(
                                     )
                                 },
                                 shape = RoundedCornerShape(20.dp),
-                                border = BorderStroke(1.dp, SpendoColor.Divider),
+                                border = BorderStroke(1.dp, if (isSelected) SpendoColor.TextPrimary else SpendoColor.Divider),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = SpendoColor.SurfaceDark,
-                                    selectedLabelColor = SpendoColor.TextInverse,
+                                    selectedContainerColor = SpendoColor.TextPrimary,
+                                    selectedLabelColor = SpendoColor.Background,
                                     containerColor = SpendoColor.Surface,
                                     labelColor = SpendoColor.TextSecondary
                                 )

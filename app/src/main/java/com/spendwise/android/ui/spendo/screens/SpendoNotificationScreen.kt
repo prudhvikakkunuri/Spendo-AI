@@ -2,6 +2,8 @@ package com.spendwise.android.ui.spendo.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +53,7 @@ fun SpendoNotificationScreen(
     onCategorySelected: (String) -> Unit,
     onClearAll: () -> Unit,
     onNavigateBack: () -> Unit,
+    onNavigateToReview: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val filteredNotifications = if (uiState.selectedNotificationCategory == "All") {
@@ -101,10 +104,10 @@ fun SpendoNotificationScreen(
                         onClick = { onCategorySelected(category) },
                         label = { Text(category, fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
                         shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, SpendoColor.Divider),
+                        border = BorderStroke(1.dp, if (isSelected) SpendoColor.TextPrimary else SpendoColor.Divider),
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = SpendoColor.SurfaceDark,
-                            selectedLabelColor = SpendoColor.TextInverse,
+                            selectedContainerColor = SpendoColor.TextPrimary,
+                            selectedLabelColor = SpendoColor.Background,
                             containerColor = SpendoColor.Surface,
                             labelColor = SpendoColor.TextSecondary
                         )
@@ -112,22 +115,100 @@ fun SpendoNotificationScreen(
                 }
             }
 
-            if (filteredNotifications.isEmpty()) {
-                SpendoEmptyState(
-                    title = "All Caught Up",
-                    message = "No unread alerts or financial notifications in this category.",
-                    icon = Icons.Outlined.Notifications
-                )
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (uiState.pendingReviewCount > 0) {
+                    item {
+                        SpendoCard(
+                            contentPadding = 16.dp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .border(1.dp, SpendoColor.AccentRed, RoundedCornerShape(16.dp))
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(SpendoColor.AccentRed)
+                                        )
+                                        DotMatrixText(
+                                            text = "ACTION REQUIRED",
+                                            fontSize = 10.sp,
+                                            color = SpendoColor.AccentRed
+                                        )
+                                    }
+                                    Text(
+                                        text = "${uiState.pendingReviewCount} UNCONFIRMED",
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SpendoColor.AccentRed
+                                    )
+                                }
+
+                                Text(
+                                    text = "Uncertain Transactions Awaiting Review",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SpendoColor.TextPrimary
+                                )
+
+                                Text(
+                                    text = "Ambiguous transaction amounts detected from notification feeds. Confirm details before applying to balance estimates.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SpendoColor.TextSecondary
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(SpendoColor.TextPrimary)
+                                        .clickable { onNavigateToReview() }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Open Verification Desk →",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = SpendoColor.Background
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (filteredNotifications.isEmpty() && uiState.pendingReviewCount == 0) {
+                    item {
+                        SpendoEmptyState(
+                            title = "All Caught Up",
+                            message = "No unread alerts or financial notifications in this category.",
+                            icon = Icons.Outlined.Notifications
+                        )
+                    }
+                } else {
                     items(filteredNotifications, key = { it.id }) { notif ->
                         NotificationCard(item = notif)
                     }
-                    item {
-                        Spacer(modifier = Modifier.height(24.dp))
-                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }

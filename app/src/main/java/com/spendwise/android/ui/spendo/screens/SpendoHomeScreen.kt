@@ -64,6 +64,7 @@ fun SpendoHomeScreen(
     onNavigateToNotifications: () -> Unit,
     onNavigateToTransactionDetail: (String) -> Unit,
     onNavigateToActivity: () -> Unit,
+    onNavigateToReview: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val dailyLimitRupees = uiState.dailyLimitPaise / 100.0
@@ -77,8 +78,8 @@ fun SpendoHomeScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToAddTransaction,
-                containerColor = SpendoColor.SurfaceDark,
-                contentColor = SpendoColor.TextInverse,
+                containerColor = SpendoColor.TextPrimary,
+                contentColor = SpendoColor.Background,
                 shape = CircleShape
             ) {
                 Icon(
@@ -150,6 +151,64 @@ fun SpendoHomeScreen(
                 }
             }
 
+            // Actionable Review Banner for ambiguous/unconfirmed transactions
+            if (uiState.pendingReviewCount > 0) {
+                item {
+                    SpendoCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToReview() },
+                        contentPadding = 14.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(SpendoColor.AccentRed)
+                                    )
+                                    DotMatrixText(
+                                        text = "${uiState.pendingReviewCount} UNVERIFIED TRANSACTION${if (uiState.pendingReviewCount > 1) "S" else ""}",
+                                        fontSize = 10.sp,
+                                        color = SpendoColor.AccentRed
+                                    )
+                                }
+                                Text(
+                                    text = "Action Required: Verify Spends",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = SpendoColor.TextPrimary
+                                )
+                                Text(
+                                    text = "Confirm ambiguous amounts before balance updates",
+                                    fontSize = 11.sp,
+                                    color = SpendoColor.TextSecondary
+                                )
+                            }
+                            Text(
+                                text = "REVIEW →",
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SpendoColor.AccentRed
+                            )
+                        }
+                    }
+                }
+            }
+
             // Hero Daily Safe-to-Spend Dark Card
             item {
                 SpendoDarkCard {
@@ -163,7 +222,7 @@ fun SpendoHomeScreen(
                                 text = "${uiState.currentStreakDays} Day Streak",
                                 indicatorColor = SpendoColor.SuccessGreen,
                                 containerColor = SpendoColor.DarkCardContainer,
-                                textColor = SpendoColor.TextInverse
+                                textColor = SpendoColor.CardDarkText
                             )
                             DotMatrixPattern(color = SpendoColor.DotPatternDark)
                         }
@@ -172,13 +231,18 @@ fun SpendoHomeScreen(
                             DotMatrixText(
                                 text = "Today's Expenses",
                                 fontSize = 11.sp,
-                                color = SpendoColor.TextInverseMuted
+                                color = SpendoColor.CardDarkTextSecondary
                             )
                             DotMatrixAmount(
                                 amountText = "%,.2f".format(todaySpentRupees),
                                 fontSize = 36.sp,
-                                color = SpendoColor.TextInverse,
+                                color = SpendoColor.CardDarkText,
                                 showRedDot = true
+                            )
+                            DotMatrixText(
+                                text = "Locally tracked financial estimate • Not a live banking feed",
+                                fontSize = 9.sp,
+                                color = SpendoColor.CardDarkTextSecondary
                             )
                         }
 
@@ -202,14 +266,14 @@ fun SpendoHomeScreen(
                                     text = "Daily Limit: ₹%,.0f".format(dailyLimitRupees),
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
-                                    color = SpendoColor.TextInverseMuted
+                                    color = SpendoColor.CardDarkTextSecondary
                                 )
                                 Text(
                                     text = "Remaining: ₹%,.0f".format(remainingRupees),
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Bold,
-                                    color = SpendoColor.TextInverse
+                                    color = SpendoColor.CardDarkText
                                 )
                             }
                         }

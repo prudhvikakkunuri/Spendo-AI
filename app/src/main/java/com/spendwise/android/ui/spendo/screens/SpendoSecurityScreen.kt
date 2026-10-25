@@ -54,10 +54,10 @@ fun SpendoSecurityScreen(
     onToggleBiometric: (Boolean) -> Unit,
     onAutoLockChange: (String) -> Unit,
     onToggleBalanceConceal: (Boolean) -> Unit,
+    onNavigateToChangePassword: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showChangePinDialog by remember { mutableStateOf(false) }
     var showAutoLockDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -81,22 +81,22 @@ fun SpendoSecurityScreen(
             // Hero Status Card
             SpendoDarkCard {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DotMatrixText(text = "Security Level", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+                    DotMatrixText(text = "Security Level", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
                     Text(
                         text = "Encrypted Local Protection",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = SpendoColor.TextInverse
+                        color = SpendoColor.CardDarkText
                     )
                     Text(
-                        text = "Biometric authentication and PIN lock secure your bank balances and financial ledger.",
+                        text = "Biometric authentication and salted PBKDF2 password hashing protect your financial accounts and ledger on-device.",
                         fontSize = 12.sp,
-                        color = SpendoColor.TextSecondary
+                        color = SpendoColor.CardDarkTextSecondary
                     )
                 }
             }
 
-            // PIN Code Management Card
+            // PIN / Password Management Card
             SpendoCard(contentPadding = 18.dp) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -105,7 +105,8 @@ fun SpendoSecurityScreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
                         Box(
                             modifier = Modifier
@@ -119,21 +120,22 @@ fun SpendoSecurityScreen(
 
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                text = "App Security PIN",
+                                text = "App Security Password",
                                 style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
                                 color = SpendoColor.TextPrimary
                             )
                             Text(
-                                text = "Current PIN: •••• (${uiState.appPin})",
+                                text = if (uiState.hasCustomPassword) "Active • Custom password configured" else "Default password (4892) in use",
                                 fontSize = 12.sp,
-                                color = SpendoColor.TextSecondary
+                                color = if (uiState.hasCustomPassword) SpendoColor.SuccessGreen else SpendoColor.AccentRedForeground
                             )
                         }
                     }
 
                     SpendoOutlinedButton(
-                        text = "Change",
-                        onClick = { showChangePinDialog = true },
+                        text = if (uiState.hasCustomPassword) "Change" else "Set",
+                        onClick = onNavigateToChangePassword,
                         height = 36.dp
                     )
                 }
@@ -289,24 +291,6 @@ fun SpendoSecurityScreen(
         }
     }
 
-    if (showChangePinDialog) {
-        AlertDialog(
-            onDismissRequest = { showChangePinDialog = false },
-            title = {
-                Text("Change Security PIN", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-            },
-            text = {
-                Text("Enter a new 4-digit PIN for Spendo. (Mock interaction: new PIN set to 4892)")
-            },
-            confirmButton = {
-                TextButton(onClick = { showChangePinDialog = false }) {
-                    Text("OK", color = SpendoColor.TextPrimary, fontWeight = FontWeight.Bold)
-                }
-            },
-            containerColor = SpendoColor.Surface,
-            shape = RoundedCornerShape(20.dp)
-        )
-    }
 
     if (showAutoLockDialog) {
         AlertDialog(

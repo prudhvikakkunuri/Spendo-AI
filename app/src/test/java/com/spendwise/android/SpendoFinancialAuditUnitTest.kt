@@ -776,6 +776,9 @@ class SpendoFinancialAuditUnitTest {
         override fun getTransactionsByCategory(categoryId: String): Flow<List<TransactionEntity>> = flowOf(emptyList())
         override fun getTransactionsInDateRange(startTime: Long, endTime: Long): Flow<List<TransactionEntity>> = flowOf(emptyList())
         override fun getTransactionsForBank(bankAccountName: String): Flow<List<TransactionEntity>> = flowOf(emptyList())
+        override fun getTransactionsForMerchant(merchantQuery: String): Flow<List<TransactionEntity>> = flowOf(emptyList())
+        override suspend fun getMerchantTotalSpendDirect(merchantQuery: String): Long =
+            transactions.filter { (it.merchant ?: "").contains(merchantQuery, ignoreCase = true) && it.direction == "DEBIT" && it.reviewStatus == "CONFIRMED" }.sumOf { it.amountPaise }
     }
 
     private class InMemoryBankAccountDao : BankAccountDao {

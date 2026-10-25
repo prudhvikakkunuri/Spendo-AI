@@ -57,6 +57,7 @@ fun SpendoMascot(
         ),
         label = "PulseAlpha"
     )
+    val activeGreen = SpendoColor.SuccessGreen
 
     Canvas(modifier = modifier.size(size)) {
         val w = this.size.width
@@ -88,7 +89,7 @@ fun SpendoMascot(
         )
 
         // 3. Dot-Matrix Eye Arrays (Dual horizontal sensor lights)
-        val eyeColor = if (isActive) SpendoColor.SuccessGreen.copy(alpha = pulseAlpha) else Color(0xFF555555)
+        val eyeColor = if (isActive) activeGreen.copy(alpha = pulseAlpha) else Color(0xFF555555)
         val eyeRadius = w * 0.05f
 
         // Left Eye Matrix Dot
@@ -131,13 +132,10 @@ fun SpendoMascotWidget(
     statusText: String = "AI AGENT • ACTIVE",
     onClick: (() -> Unit)? = null
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(SpendoColor.SurfaceDark)
-            .border(1.dp, SpendoColor.BorderDark, RoundedCornerShape(20.dp))
-            .padding(16.dp)
+    SpendoCard(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick,
+        contentPadding = 16.dp
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -178,7 +176,7 @@ fun SpendoMascotWidget(
                     fontSize = 13.sp,
                     lineHeight = 18.sp,
                     fontWeight = FontWeight.Normal,
-                    color = SpendoColor.TextInverse
+                    color = SpendoColor.TextPrimary
                 )
             }
         }

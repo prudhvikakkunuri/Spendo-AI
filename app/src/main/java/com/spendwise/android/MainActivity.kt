@@ -4,7 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.spendwise.android.ui.spendo.SpendoApp
+import com.spendwise.android.ui.spendo.model.SpendoViewModel
 import com.spendwise.android.ui.spendo.theme.SpendoTheme
 
 /**
@@ -15,8 +19,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            SpendoTheme {
-                SpendoApp()
+            val viewModel: SpendoViewModel = viewModel()
+            val uiState by viewModel.uiState.collectAsState()
+            SpendoTheme(themeMode = uiState.themeMode) {
+                SpendoApp(viewModel = viewModel)
             }
         }
     }

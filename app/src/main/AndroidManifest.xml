@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
         android:name=".SpendWiseApplication"
         android:allowBackup="false"
@@ -31,6 +33,21 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Nothing OS Inspired Spendo Home Screen Launcher Widget -->
+        <receiver
+            android:name=".widget.SpendoWidgetProvider"
+            android:exported="true"
+            android:label="Spendo AI">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.spendwise.android.widget.ACTION_TOGGLE_PRIVACY" />
+                <action android:name="com.spendwise.android.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/spendo_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

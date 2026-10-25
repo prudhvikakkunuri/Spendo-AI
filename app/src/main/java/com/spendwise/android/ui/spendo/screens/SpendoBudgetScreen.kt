@@ -37,6 +37,7 @@ import com.spendwise.android.ui.spendo.components.DotMatrixText
 import com.spendwise.android.ui.spendo.components.SpendoCard
 import com.spendwise.android.ui.spendo.components.SpendoDarkCard
 import com.spendwise.android.ui.spendo.components.SpendoPrimaryButton
+import com.spendwise.android.ui.spendo.components.SpendoTextField
 import com.spendwise.android.ui.spendo.components.SpendoTopBar
 import com.spendwise.android.ui.spendo.model.SpendoUiState
 import com.spendwise.android.ui.spendo.theme.SpendoColor
@@ -86,20 +87,20 @@ fun SpendoBudgetScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DotMatrixText(text = "Daily Allowance", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+                        DotMatrixText(text = "Daily Allowance", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
                         Text(
                             text = "${(dailyProgress * 100).toInt()}% USED",
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
-                            color = SpendoColor.TextInverse
+                            color = SpendoColor.CardDarkText
                         )
                     }
 
                     DotMatrixAmount(
                         amountText = "%,.2f".format(todaySpentRupees),
                         fontSize = 32.sp,
-                        color = SpendoColor.TextInverse
+                        color = SpendoColor.CardDarkText
                     )
 
                     LinearProgressIndicator(
@@ -120,14 +121,14 @@ fun SpendoBudgetScreen(
                             text = "Ceiling: ₹%,.0f".format(dailyLimitRupees),
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = SpendoColor.TextInverseMuted
+                            color = SpendoColor.CardDarkTextSecondary
                         )
                         Text(
                             text = "Remaining: ₹%,.0f".format(dailyRemaining),
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            color = SpendoColor.TextInverse
+                            color = SpendoColor.CardDarkText
                         )
                     }
                 }
@@ -253,25 +254,21 @@ fun SpendoBudgetScreen(
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
             title = {
-                Text("Edit Budget Ceilings", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                Text("Edit Budget Ceilings", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = SpendoColor.TextPrimary)
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
+                    SpendoTextField(
                         value = dailyInput,
                         onValueChange = { dailyInput = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("Daily Limit in ₹") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = "Daily Limit in ₹",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
-                    OutlinedTextField(
+                    SpendoTextField(
                         value = monthlyInput,
                         onValueChange = { monthlyInput = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("Monthly Limit in ₹") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = "Monthly Limit in ₹",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                 }
             },

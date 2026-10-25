@@ -26,4 +26,6 @@ sealed class SpendoScreen(val route: String) {
     object ImportExport : SpendoScreen("spendo_import_export")
     object Settings : SpendoScreen("spendo_settings")
     object Security : SpendoScreen("spendo_security")
+    object ChangePassword : SpendoScreen("spendo_change_password")
+    object Review : SpendoScreen("spendo_review")
 }
