@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://prudhvikakkunuri.github.io/Spendo-AI/sitemap.xml
