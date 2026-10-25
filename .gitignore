@@ -20,3 +20,8 @@ app/build/
 *.jks
 *.keystore
 keystore.properties
+
+# Website dependencies and build output
+website/node_modules/
+website/dist/
+website/.env*
