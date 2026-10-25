@@ -1,223 +1,120 @@
-<<<<<<< HEAD
-# SpendWise Android
-
-**SpendWise** is an Android-first, privacy-hardened personal expense tracker built with native Kotlin, Jetpack Compose, Material 3, and Room. It detects likely debit and credit transactions locally from notifications posted by user-approved banking and payment applications, records expenses on-device, categorizes transactions, calculates monthly budgets, and provides daily Safe-to-Spend insights.
-
----
-
-## 🚀 Status: Phase 0–6 Complete (Production-Ready Architecture)
-
-SpendWise has undergone end-to-end implementation and quality assurance:
-- **Phase 0:** Project Foundation & Modular Clean Architecture
-- **Phase 1:** Compose UI, Deep Charcoal & Lime Design System, 4-Tab Navigation
-- **Phase 2:** Room Database, Strict Integer Paise Ledger, Filters, CRUD & Sanitized CSV Export
-- **Phase 3:** Pure Kotlin `SafeToSpendCalculator`, Budget Profiles, Commitments & Safe-to-Spend
-- **Phase 4:** `NotificationListenerService` Ingestion, In-Memory Allowlist Filtering & Instant Pause Switch
-- **Phase 5:** Deterministic Heuristic `TransactionParser`, Reversals/Duplicates, and Review Queue
-- **Phase 6:** Quality Assurance, Security Hardening, Backup Exclusion, and Privacy Verification
-
----
-
-## 🔒 Non-Negotiable Privacy & Security Guarantees
-
-SpendWise is designed from the ground up with a strict privacy-first model:
-
-1. **Zero Network Communication:**
-   - The application does **not** declare the `android.permission.INTERNET` permission in its manifest.
-   - Financial data, parsed summaries, and user inputs can never physically leave the device.
-2. **No Bank Credentials, UPI APIs, or SMS Reading:**
-   - SpendWise never prompts for bank logins, UPI PINs, account credentials, or `RECEIVE_SMS`/`READ_SMS` permissions.
-3. **Explicit User-Granted Notification Access:**
-   - Ingestion relies strictly on Android's native `NotificationListenerService`.
-   - Requires explicit one-time activation in Android system settings with a dedicated onboarding explanation.
-4. **Strict Package Allowlisting:**
-   - Only notifications from user-selected payment and banking packages (e.g. Google Pay, PhonePe, Paytm, CRED, BHIM, major Indian banks) are inspected. Notifications from all other apps are discarded immediately at the OS callback level.
-5. **No Cloud Sync, Analytics SDKs, or External AI:**
-   - Zero third-party telemetry, trackers, external LLMs, or crash-reporting servers.
-6. **No Raw Financial Log Leakage:**
-   - Android logs (`Logcat`) never contain raw notification bodies, full merchant names, or bank balance numbers. Log calls only output non-sensitive status codes and package IDs.
-7. **Cloud Backup Exclusions:**
-   - `android:allowBackup="false"` is enforced.
-   - `backup_rules.xml` and `data_extraction_rules.xml` explicitly exclude the Room database (`database`) and DataStore preferences (`sharedpref`) from automated Android cloud backups.
-8. **Instant Pause Switch & Clear All Data:**
-   - Toggling **Pause Detection** immediately halts ingestion in memory.
-   - **Clear All Data** purges transactions, budget settings, recurring commitments, deduplication tables, and preferences.
-9. **Sanitized CSV Ledger Export:**
-   - Exported CSV files contain clean structured accounting columns (`date,direction,amount_inr,merchant,category,note,source`). No raw notification text or internal database IDs are ever exported.
-
----
-
-## 💡 Tech Stack
-
-- **Language:** Kotlin 1.9.24
-- **UI Toolkit:** Jetpack Compose with Material 3 (Charcoal `#121212`, Surface `#1E1E1E`, Lime `#C6FF00`)
-- **Architecture:** Unidirectional Data Flow (UDF), MVVM (`ViewModel` + `StateFlow`), Coroutines
-- **Local Database:** Room 2.6.1 with SQLite
-- **Local Preferences:** AndroidX DataStore (Preferences)
-- **Minimum SDK:** API 26 (Android 8.0 Oreo)
-- **Target SDK:** API 34 (Android 14 UpsideDownCake)
-- **Toolchain:** Android Gradle Plugin 8.3.2, Gradle 8.6, Java 17
-
-```text
-com.spendwise.android
-├── data/
-│   ├── db/
-│   │   ├── entity/             # TransactionEntity, BudgetProfileEntity, RecurringCommitmentEntity
-│   │   ├── dao/                # TransactionDao, BudgetDao, RecurringCommitmentDao
-│   │   └── AppDatabase.kt      # Room database with pre-populated default budget
-│   ├── preferences/            # SpendWisePreferencesRepository (allowlists, pause state)
-│   └── repository/             # TransactionRepositoryImpl, BudgetRepositoryImpl
-├── domain/
-│   ├── model/                  # Domain transactions, directions, categories, review statuses
-│   ├── parser/                 # Pure Kotlin TransactionParser (heuristic rules & regexes)
-│   ├── budget/                 # Pure Kotlin SafeToSpendCalculator
-│   └── dedup/                  # TransactionDeduplicator (multi-signal fingerprinting)
-├── notification/               # TransactionNotificationListenerService & engine bridge
-├── ui/
-│   ├── theme/                  # Material 3 Charcoal & Lime theme, typography, color tokens
-│   ├── navigation/             # Bottom navigation destinations & routing
-│   ├── dashboard/              # Safe-to-spend hero card, today's spending, category breakdowns
-│   ├── transactions/           # Transaction ledger, search, filters, manual entry dialog
-│   ├── review/                 # Review Queue for ambiguous or duplicate transactions
-│   ├── budget/                 # Income, savings reserve, upcoming recurring commitments
-│   └── settings/               # Monitored apps selection, detection pause, export & wipe
-└── util/                       # CurrencyFormatter (deterministic paise to INR), CsvExporter
-```
-
----
-
-## 💰 Financial Core & Money Arithmetic
-
-SpendWise enforces **strict integer paise (`Long`)** for all monetary values.
-- `₹1.00` is represented as `100L` paise.
-- **Never uses `Float` or `Double`** for currency arithmetic, eliminating IEEE-754 floating-point rounding errors.
-- **Safe-to-Spend Calculation:**
-  $$\text{Spendable Remaining} = \text{Monthly Income} - \text{Savings Reserve} - \text{Upcoming Commitments} - \text{Confirmed Month Debits}$$
-  $$\text{Daily Safe-to-Spend} = \frac{\max(0, \text{Spendable Remaining})}{\text{Days Remaining in Month}}$$
-- **Review Queue Isolation:** Unconfirmed transactions (`NEEDS_REVIEW`) and internal transfers are excluded from confirmed monthly spending until explicitly approved by the user.
-
----
-
-## 🔍 Supported Transaction Formats & Heuristics
-
-The on-device parser detects standard Indian payment notifications across UPI, net banking, debit cards, and credit cards:
-
-### Supported Formats:
-- `Rs. 450.00`, `INR 1,250`, `₹750.50`, `INR 2500.00`
-- Balance exclusion safeguards: ignores `Bal: ₹12,400.00`, `Avl Bal INR 5,000`, or `Account Balance is Rs. 10,000`
-
-### Direction Heuristics:
-- **Debit:** "debited by", "paid to", "spent on", "sent to", "withdrawn from", "payment to"
-- **Credit:** "credited with", "received from", "refund of", "cashback of", "deposited to"
-
-### Robust Boundary Handling:
-- **Reversals / Refunds:** Automatically classified with high confidence into the `INCOME` / credit category.
-- **Failed / Declined Transactions:** Flagged as `FAILED_PAYMENT` and routed to the Review Queue with `NEEDS_REVIEW` status.
-- **Ambiguous / Multi-Amount Notifications:** Flagged as `AMBIGUOUS_AMOUNT` and routed to the Review Queue for manual verification.
-- **Non-Transaction Noise:** Informational OTPs, promotional campaigns, and loan offers are silently ignored (`NotTransaction`).
-- **Deduplication:** Short-window fingerprinting prevents double-recording when both a bank SMS app and a UPI app notify for the same event.
-
----
-
-## ⚠️ Known Limitations
-
-1. **Language Support:** Detection heuristics currently target English-language banking and UPI notifications. Regional Indian language notifications are ignored.
-2. **Notification Clearing:** If the Android OS kills notification listeners under aggressive battery-saver OEM profiles before delivery, notifications cannot be retroactively fetched without Accessibility or SMS permissions (which SpendWise strictly refuses to request).
-3. **Multi-Leg EMI / Foreign Currencies:** Complex loan restructuring and non-INR foreign transactions are not automatically categorized.
-4. **Manual Fallback:** For unmonitored apps, cash purchases, or edge-case transactions, users can instantly add transactions manually from the Transactions screen.
-
----
-
-## 🛠️ Build & Verification Instructions
-
-### Prerequisites
-- **Java Development Kit:** JDK 17 LTS (`JAVA_HOME` pointing to JDK 17)
-- **Android SDK:** Platform 34 and Build-Tools 34.0.0 (`ANDROID_HOME` pointing to SDK)
-
-### 1. Run Unit Tests (6 Test Suites, 56+ Unit Tests)
-```powershell
-$env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot"
-.\gradlew.bat test
-```
-Runs:
-- `ProjectFoundationUnitTest` (Architecture & baseline models)
-- `Phase1NavigationAndDemoUnitTest` (Navigation routes & theme validation)
-- `Phase2LedgerAndCsvUnitTest` (Room entities, DAOs, and sanitized CSV exports)
-- `Phase3BudgetAndSafeToSpendUnitTest` (Pure `SafeToSpendCalculator` and paise arithmetic)
-- `Phase4NotificationInfrastructureUnitTest` (Package allowlisting and pause states)
-- `Phase5TransactionParsingUnitTest` (Heuristic parsing, reversals, failures, deduplication)
-- `Phase6QualityAssuranceUnitTest` (Privacy, ledger mathematical integrity, missing-input handling)
-
-### 2. Assemble Debug APK
-```powershell
-$env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot"
-.\gradlew.bat assembleDebug
-```
-Output APK location:
-`app/build/outputs/apk/debug/app-debug.apk`
-
-### 3. Install & Run via ADB
-```powershell
-adb devices
-.\gradlew.bat installDebug
-adb shell am start -n com.spendwise.android/.MainActivity
-```
-To enable notification access on an emulator or physical test device:
-1. Open SpendWise.
-2. Navigate to **Settings** > **Notification Access**.
-3. Tap **Enable Notification Access** to launch Android's Notification Listener settings.
-4. Grant permission to **SpendWise**.
-5. Select monitored apps in **Monitored Apps Setup**.
-=======
-# Spendo AI
+# Spendo AI — Android Expense Tracker & Personal Finance App
 
 <p align="center">
-  <strong>Personal finance, made clearer.</strong><br/>
-  An AI-powered mobile experience for tracking expenses, understanding spending, and building better money habits.
+  <strong>Understand your money. Spend with intention.</strong><br/>
+  A privacy-first, Android-focused personal finance app for tracking transactions, monitoring budgets, and reviewing spending.
 </p>
 
 <p align="center">
-  <img alt="Project status" src="https://img.shields.io/badge/status-in%20development-orange" />
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Android%20focused-3DDC84?logo=android&logoColor=white" />
-  <img alt="Repository visibility" src="https://img.shields.io/badge/repository-public-blue" />
+  <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk">
+    <img alt="Download APK" src="https://img.shields.io/badge/Download-Android%20APK-111111?style=for-the-badge&logo=android&logoColor=white" />
+  </a>
+  <a href="https://github.com/prudhvikakkunuri/Spendo-AI/actions/workflows/android-ci.yml">
+    <img alt="Android CI" src="https://img.shields.io/github/actions/workflow/status/prudhvikakkunuri/Spendo-AI/android-ci.yml?branch=main&label=Android%20CI&style=for-the-badge" />
+  </a>
+  <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases">
+    <img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/prudhvikakkunuri/Spendo-AI/total?label=APK%20downloads&logo=github&style=for-the-badge" />
+  </a>
+</p>
+
+<p align="center">
+  <img alt="Android" src="https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white" />
+  <img alt="Kotlin" src="https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white" />
+  <img alt="Jetpack Compose" src="https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white" />
+  <img alt="Local-first" src="https://img.shields.io/badge/Design-Local--first-555555" />
+  <img alt="Status" src="https://img.shields.io/badge/Status-In%20development-orange" />
 </p>
 
 ---
+
+## Table of contents
+
+- [Overview](#overview)
+- [Download Spendo AI](#download-spendo-ai)
+- [Features](#features)
+- [Privacy and security](#privacy-and-security)
+- [Technology stack](#technology-stack)
+- [Build from source](#build-from-source)
+- [Install the APK](#install-the-apk)
+- [Troubleshooting](#troubleshooting)
+- [Report a bug or request a feature](#report-a-bug-or-request-a-feature)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Overview
 
-**Spendo AI** is a personal finance application in development that aims to bring everyday money management and AI assistance into one focused mobile experience. The project is being built around a simple goal: help people understand where their money goes without making money management feel complicated.
+**Spendo AI** is an Android personal finance and expense-tracking project built with Kotlin and Jetpack Compose. It is designed to help users organize transactions, review spending, manage budgets, and understand how their money is being used.
 
-This repository is the central home for the application's source code, technical documentation, and project development.
+The current architecture prioritizes local data storage and user-controlled notification access. This repository contains the Android source code, transaction-processing logic, UI, and automated tests. Features under development are identified as such; the presence of a screen does not necessarily mean every connected workflow is complete.
 
-> **Project status:** In active development. The repository is being prepared for the initial application code upload. Features, architecture, and setup instructions will be updated as implementation progresses.
+**Project status:** In development. Check [Releases](https://github.com/prudhvikakkunuri/Spendo-AI/releases) for available APK builds and release notes.
 
-## Product direction
+## Download Spendo AI
 
-The following describes the current product direction. These capabilities should not be considered shipped until implemented and documented.
+**[Download the latest development APK](https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk)** · [Release notes](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest) · [Browse all releases](https://github.com/prudhvikakkunuri/Spendo-AI/releases)
 
-- **Expense and income tracking** — record transactions and keep financial activity organized.
-- **Categories and budgets** — group transactions and compare spending against planned budgets.
-- **Spending insights** — make personal spending patterns easier to review.
-- **AI assistant** — provide a conversational interface for finance-related questions, with AI activation configured by the user.
-- **User-configured AI provider** — allow users to enter an API key before enabling the chatbot, subject to the provider and integration ultimately supported.
-- **Thoughtful mobile experience** — prioritize a clean interface, responsive interactions, and efficient everyday workflows.
-- **Privacy-conscious design** — handle financial data and credentials with care.
+Each published release will include its version notes and, when the release workflow completes successfully, a downloadable `spendo-ai.apk` asset.
 
-## Architecture and technology
+- **Latest development APK:** [Download `spendo-ai.apk` directly](https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk) or read the [release notes](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest). This pre-release is refreshed after a successful main-branch test/build.
+- **Development build:** Open [Android CI workflow runs](https://github.com/prudhvikakkunuri/Spendo-AI/actions/workflows/android-ci.yml), select a successful run, and download the `spendo-ai-debug-apk` artifact. CI artifacts are temporary and are not a substitute for a versioned release.
+- **Versioned releases:** Stable version tags such as `v0.1.0` trigger the versioned release workflow. The first run needs to complete successfully before its APK appears on the Releases page.
 
-The final stack will be confirmed after the initial source code is available. The current direction includes:
+> **Signing note:** A public release intended for ongoing use should be signed with a persistent release keystore. If repository signing secrets are not configured, the automated release workflow publishes a clearly labelled pre-release/testing APK. Debug APKs produced by separate CI runs may have different signing certificates and may not update an earlier installation. Never uninstall an existing app with important local data unless you have exported or backed it up.
 
-| Area | Current direction |
+Only install APKs from this repository's official [Releases](https://github.com/prudhvikakkunuri/Spendo-AI/releases) page, and review the release notes before installing.
+
+## Features
+
+The repository includes implementation for the following areas; exact completeness can vary while the app is under active development.
+
+- **Transaction tracking:** transaction list, manual entry, search, filters, and transaction details.
+- **Notification-based detection:** optional monitoring of user-selected banking and payment app notifications through Android's Notification Listener permission.
+- **Transaction parsing:** local heuristic parsing for supported notification formats, with ambiguous cases eligible for review.
+- **Budgets and spending insights:** budgeting tools, monthly spending calculations, and Safe-to-Spend logic.
+- **Bank and account views:** account-related UI and transaction association, with balance functionality continuing to evolve.
+- **Review queue:** a workflow for examining uncertain transaction detections.
+- **Import and export:** structured CSV export and related utilities.
+- **Privacy controls:** monitored-app selection, detection pause controls, and data-clearing options.
+- **Android-native UI:** Kotlin, Jetpack Compose, and Material 3.
+
+Features such as broad bank-specific message coverage, live bank connectivity, cloud synchronization, and fully integrated AI assistance must not be assumed unless a release explicitly documents and verifies them.
+
+## Privacy and security
+
+Spendo AI currently follows a local-first design in its Android manifest and core storage architecture.
+
+- Financial records use local Room/SQLite storage.
+- Automatic detection is based on Android notification access granted explicitly by the user; the app does not request SMS-reading permissions in the current manifest.
+- The current app manifest does not declare Android's `INTERNET` permission. Do not assume cloud sync or remote AI calls are available in this build.
+- The application disables standard Android backup and includes backup exclusion rules for local financial data.
+- Transaction exports are designed to avoid including raw notification message text or internal database identifiers.
+- Never commit API keys, passwords, signing keystores, account information, or real bank messages to source control.
+- Notification access can expose sensitive content from selected apps. Enable it only after reviewing the permission explanation and select only sources you intend to monitor.
+
+Please report security issues privately when possible; see [SECURITY.md](SECURITY.md) if available.
+
+## Technology stack
+
+| Area | Technology |
 | --- | --- |
-| Client | Android-focused mobile application |
-| Data and backend | Supabase |
-| AI | User-configured provider integration |
-| Source control | Git and GitHub |
+| Platform | Android |
+| Language | Kotlin |
+| UI | Jetpack Compose, Material 3 |
+| Architecture | MVVM, StateFlow, Coroutines |
+| Local database | Room / SQLite |
+| Local preferences | AndroidX DataStore |
+| Build system | Gradle, Android Gradle Plugin |
+| Tests | JUnit and Kotlin coroutine testing |
+| Minimum Android version | Android 8.0 (API 26), as configured in the app module |
 
-Specific frameworks, supported AI providers, data models, and deployment details will be documented after they are confirmed in the codebase. Avoid relying on this table as a final architecture specification.
+## Build from source
 
-## Getting started
+### Prerequisites
+
+- Android Studio or a compatible command-line environment.
+- JDK 17.
+- Android SDK Platform 34 and Build Tools 34.0.0, as required by the current project configuration.
+- Git.
 
 ### Clone the repository
 
@@ -226,55 +123,112 @@ git clone https://github.com/prudhvikakkunuri/Spendo-AI.git
 cd Spendo-AI
 ```
 
-### Development setup
+### Run unit tests
 
-The application source and dependency manifests have not yet been documented here. Setup instructions will be added once the initial code is pushed, including the required toolchain, configuration, and run/build commands.
+On Windows PowerShell:
 
-## Configuration and secrets
+```powershell
+.\gradlew.bat test
+```
 
-Before running the application, configure any required service credentials using the documented local development process.
+On macOS/Linux:
 
-- Never commit API keys, access tokens, passwords, private signing keys, or database credentials.
-- Keep local secret/configuration files out of version control and provide a sanitized `.env.example` or equivalent template when needed.
-- Do not include Supabase service-role keys in a mobile client. Use appropriate server-side boundaries for privileged operations.
-- Configure Supabase Row Level Security (RLS) and least-privilege access policies before using real personal financial data.
-- Treat user-provided AI credentials as sensitive. Use platform-appropriate secure storage and avoid logging keys or sending them to unrelated services.
-- If a credential is exposed, revoke or rotate it immediately. Removing it in a later commit does not make the exposed credential safe.
+```bash
+chmod +x gradlew
+./gradlew test
+```
 
-## Repository conventions
+### Build a debug APK
 
-To keep the project maintainable as it grows:
+On Windows PowerShell:
 
-- Prefer focused, descriptive commits.
-- Keep documentation updated alongside changes to setup, features, or architecture.
-- Do not commit generated build output, local IDE state, personal data, or secrets.
-- Use issues to track bugs and scoped improvements.
-- Review changes before merging them into the main development branch.
+```powershell
+.\gradlew.bat assembleDebug
+```
 
-## Roadmap
+On macOS/Linux:
 
-This roadmap is directional and will evolve with implementation.
+```bash
+chmod +x gradlew
+./gradlew assembleDebug
+```
 
-- [ ] Add the initial application source code and dependency manifests.
-- [ ] Document the development environment and local run instructions.
-- [ ] Implement transaction entry and expense/income history.
-- [ ] Add categories, budgets, and spending summaries.
-- [ ] Integrate the AI assistant and its user-controlled configuration flow.
-- [ ] Define secure persistence and Supabase access policies.
-- [ ] Add automated checks and core tests.
-- [ ] Document release, troubleshooting, and contribution workflows.
+The debug APK is generated at:
 
-## Issues and feedback
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
 
-Please use [GitHub Issues](https://github.com/prudhvikakkunuri/Spendo-AI/issues) to report a reproducible bug or propose an improvement. Include relevant context, expected behavior, actual behavior, and steps to reproduce where applicable. Do not include credentials, account details, or real financial records in issue reports.
+### Publish a versioned APK release
+
+The latest development build is published to the fixed [dev-latest release](https://github.com/prudhvikakkunuri/Spendo-AI/releases/tag/dev-latest) after a successful push to `main`. For a versioned release, create and push a tag matching `v*`:
+
+```bash
+git checkout main
+git pull origin main
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Replace `v0.1.0` with the next version. The workflow tests the project, builds an APK, and attaches it to a GitHub Release. If release-signing secrets are configured, it builds a signed release APK; otherwise it publishes a pre-release testing APK.
+
+For a signed release, configure these repository Actions secrets before tagging:
+
+- `ANDROID_KEYSTORE_BASE64` — the Base64-encoded release keystore file.
+- `ANDROID_KEYSTORE_PASSWORD` — the keystore password.
+- `ANDROID_KEY_ALIAS` — the signing key alias.
+- `ANDROID_KEY_PASSWORD` — the signing key password.
+
+Create and securely back up the release keystore before the first signed release. Keep the keystore and passwords out of Git. Losing or changing the signing key can prevent users from installing future versions as updates.
+
+## Install the APK
+
+1. Download `spendo-ai.apk` from the repository's [Releases page](https://github.com/prudhvikakkunuri/Spendo-AI/releases).
+2. Open the APK on your Android device.
+3. If Android asks, allow your browser or file manager to install apps from that source.
+4. Review the requested permissions before enabling optional notification access.
+5. After installation, open Spendo AI and configure its settings.
+
+The exact prompts vary by Android version and device manufacturer. Install only builds whose source and release notes you trust.
+
+## Troubleshooting
+
+**The APK cannot be installed**
+- Confirm that the device meets the minimum supported Android version.
+- Download the APK again if the file appears incomplete.
+- Check whether an existing installation was signed with a different certificate. A debug APK from a different CI run may require uninstalling the previous debug build; uninstalling can erase local app data.
+
+**Transactions are not detected**
+- Open Android Settings and verify that notification access is enabled for Spendo AI.
+- Confirm that the relevant banking or payment app is selected in the app's monitored-app settings.
+- Check whether the source app publishes a transaction notification. The app cannot parse an event it never receives.
+- Review uncertain detections instead of assuming every bank message format is supported.
+
+**The build fails**
+- Verify JDK 17 is selected.
+- Install Android SDK Platform 34 and Build Tools 34.0.0.
+- Run `./gradlew test` (or `.\gradlew.bat test` on Windows) and inspect the first meaningful error in the output.
+
+## Report a bug or request a feature
+
+Use GitHub Issues to report reproducible problems or propose improvements:
+
+- [Report a bug](https://github.com/prudhvikakkunuri/Spendo-AI/issues/new?template=bug_report.yml)
+- [Request a feature](https://github.com/prudhvikakkunuri/Spendo-AI/issues/new?template=feature_request.yml)
+- [Browse existing issues](https://github.com/prudhvikakkunuri/Spendo-AI/issues)
+
+For bugs, include the app version, Android version, steps to reproduce, expected behaviour, and actual behaviour. **Do not post bank statements, real transaction messages, account numbers, API keys, passwords, or other personal financial data.** Use synthetic examples with amounts and identifiers you made up.
+
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Keep changes focused, add or update tests for behaviour changes, and never submit real financial data or secrets.
 
 ## License
 
-No license has been declared yet. Unless and until a license is added, no permission is granted to reuse, modify, or redistribute this project's code beyond rights provided by applicable law.
+A license has not yet been declared for this repository. Until the owner adds a license, assume that normal copyright applies and do not assume the code is licensed for reuse or redistribution.
 
 ---
 
 <p align="center">
-  <sub>Spendo AI · A personal finance project in development</sub>
+  <sub>Spendo AI · Android personal finance and expense tracking · Built with Kotlin</sub>
 </p>
->>>>>>> 1a3dbe06325653f71388423b9490ceddded88deb
