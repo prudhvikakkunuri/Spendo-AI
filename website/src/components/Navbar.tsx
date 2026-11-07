@@ -104,7 +104,8 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, onToggleTheme }) => {
 
             {/* Download CTA */}
             <a
-              href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk"
+              href="./spendo-ai.apk"
+              download="spendo-ai.apk"
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-mono-tech font-bold rounded-lg bg-[#D71920] hover:bg-[#B8141A] text-white shadow-sm transition-all active:scale-[0.98]"
             >
               <Download className="w-3.5 h-3.5" />
@@ -156,7 +157,8 @@ export const Navbar: React.FC<NavbarProps> = ({ theme, onToggleTheme }) => {
               <span>View Source on GitHub</span>
             </a>
             <a
-              href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk"
+              href="./spendo-ai.apk"
+              download="spendo-ai.apk"
               className="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-mono-tech font-bold rounded-lg bg-[#D71920] text-white"
             >
               <Download className="w-4 h-4" />

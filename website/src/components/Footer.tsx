@@ -116,7 +116,8 @@ export const Footer: React.FC = () => {
               No account required. Install the APK and start tracking immediately.
             </p>
             <a
-              href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk"
+              href="./spendo-ai.apk"
+              download="spendo-ai.apk"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-mono-tech font-bold bg-[#D71920] hover:bg-[#B8141A] text-white transition-all shadow-md shadow-[#D71920]/20"
             >
               <Download className="w-3.5 h-3.5" />

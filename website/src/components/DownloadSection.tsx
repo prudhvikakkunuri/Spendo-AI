@@ -48,7 +48,8 @@ export const DownloadSection: React.FC = () => {
           {/* Action CTAs */}
           <div className="flex flex-col sm:flex-row items-center gap-4 pt-2 border-t border-[#1E1E24] light:border-[#E4E4E7]">
             <a
-              href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk"
+              href="./spendo-ai.apk"
+              download="spendo-ai.apk"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-xl font-mono-tech font-bold text-sm bg-[#D71920] hover:bg-[#B8141A] text-white shadow-xl shadow-[#D71920]/25 transition-all active:scale-[0.98]"
             >
               <Download className="w-4 h-4" />
@@ -56,12 +57,12 @@ export const DownloadSection: React.FC = () => {
             </a>
 
             <a
-              href="https://github.com/prudhvikakkunuri/Spendo-AI/releases"
+              href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk"
               target="_blank"
               rel="noopener noreferrer"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-mono-tech text-sm font-semibold border border-[#27272E] light:border-[#E4E4E7] bg-[#18181C] light:bg-[#F4F4F5] text-[#F4F4F5] light:text-[#09090B] hover:border-[#3F3F4A] transition-all"
             >
-              <span>Browse All Releases &amp; Notes</span>
+              <span>GitHub Release Mirror</span>
               <ExternalLink className="w-3.5 h-3.5 text-[#71717A]" />
             </a>
           </div>

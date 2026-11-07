@@ -37,7 +37,8 @@ export const Hero: React.FC = () => {
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
               <a
-                href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk"
+                href="./spendo-ai.apk"
+                download="spendo-ai.apk"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-xl font-mono-tech font-bold text-sm bg-[#D71920] hover:bg-[#B8141A] text-white shadow-lg shadow-[#D71920]/20 transition-all active:scale-[0.98]"
               >
                 <Download className="w-4 h-4" />
