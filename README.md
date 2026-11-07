@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://prudhvikakkunuri.github.io/Spendo-AI/">
+  <a href="https://spendoai.vercel.app">
     <img alt="Official Website" src="https://img.shields.io/badge/Official%20Website-Spendo-D71920?style=for-the-badge&logo=googlechrome&logoColor=white" />
   </a>
   <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk">
@@ -21,12 +21,12 @@
   <img alt="Android" src="https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white" />
   <img alt="Kotlin" src="https://img.shields.io/badge/Language-Kotlin-7F52FF?logo=kotlin&logoColor=white" />
   <img alt="Jetpack Compose" src="https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-140%20Passing-22C55E?logo=junit5&logoColor=white" />
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-246%20Passing-22C55E?logo=junit5&logoColor=white" />
   <img alt="Local-first" src="https://img.shields.io/badge/Design-100%25%20On--Device-555555" />
 </p>
 
 <p align="center">
-  <a href="https://prudhvikakkunuri.github.io/Spendo-AI/">🌐 Project website</a> ·
+  <a href="https://spendoai.vercel.app">🌐 Project website</a> ·
   <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases/download/dev-latest/spendo-ai.apk">⬇ Download Android APK</a> ·
   <a href="https://github.com/prudhvikakkunuri/Spendo-AI/releases">Releases</a>
 </p>
@@ -53,7 +53,7 @@
 
 The current architecture prioritizes local data storage and user-controlled notification access. This repository contains the Android source code, transaction-processing logic, UI, and automated tests. Features under development are identified as such; the presence of a screen does not necessarily mean every connected workflow is complete.
 
-**Project status:** In development. Check [Releases](https://github.com/prudhvikakkunuri/Spendo-AI/releases) for available APK builds and release notes.
+**Project status:** In development. Visit the [official Spendo showcase website](https://spendoai.vercel.app) and check [GitHub Releases](https://github.com/prudhvikakkunuri/Spendo-AI/releases) for APK builds and release notes.
 
 ## Download Spendo AI
 
@@ -75,7 +75,9 @@ The repository includes implementation for the following areas; exact completene
 
 - **Transaction tracking:** transaction list, manual entry, search, filters, and transaction details.
 - **Notification-based detection:** optional monitoring of user-selected banking and payment app notifications through Android's Notification Listener permission.
-- **Transaction parsing:** local heuristic parsing for supported notification formats, with ambiguous cases eligible for review.
+- **Bank-aware transaction matching:** supported bank notification formats can identify a saved account using the bank identity and masked account suffix (last four digits); ambiguous or unknown matches require user review.
+- **Review-first notification workflow:** detected transactions enter a persistent review queue and do not affect confirmed totals or balances until explicitly approved.
+- **Transaction parsing:** local parsing for supported notification formats, with duplicate suppression and review for ambiguous cases.
 - **Budgets and spending insights:** budgeting tools, monthly spending calculations, and Safe-to-Spend logic.
 - **Bank and account views:** account-related UI and transaction association, with balance functionality continuing to evolve.
 - **Review queue:** a workflow for examining uncertain transaction detections.
