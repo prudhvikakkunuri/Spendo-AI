@@ -50,13 +50,23 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.spendwise.android.data.db.AppDatabase
+import com.spendwise.android.data.db.entity.CommitmentEntity
+
 @Composable
 fun SpendoCalendarScreen(
     uiState: SpendoUiState,
     onSelectDay: (Int) -> Unit,
     onNavigateToTransactionDetail: (String) -> Unit,
+    onNavigateBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val db = remember { AppDatabase.getInstance(context) }
+    val commitments by db.commitmentDao().getAllCommitments().collectAsState(initial = emptyList())
     val deviceNow = remember { Calendar.getInstance() }
     var selectedYear by remember { mutableIntStateOf(deviceNow.get(Calendar.YEAR)) }
     var selectedMonth by remember { mutableIntStateOf(deviceNow.get(Calendar.MONTH)) } // 0-based
@@ -148,11 +158,35 @@ fun SpendoCalendarScreen(
         set
     }
 
+    // Days with scheduled commitments within this month
+    val daysWithCommitments = remember(commitments, selectedYear, selectedMonth) {
+        val cal = Calendar.getInstance()
+        val set = mutableSetOf<Int>()
+        for (c in commitments) {
+            cal.timeInMillis = c.dueAtEpochMs
+            if (cal.get(Calendar.YEAR) == selectedYear && cal.get(Calendar.MONTH) == selectedMonth) {
+                set.add(cal.get(Calendar.DAY_OF_MONTH))
+            }
+        }
+        set
+    }
+
     // Selected day transactions
     val dayTransactions = remember(monthTransactions, selectedDay, selectedYear, selectedMonth) {
         val cal = Calendar.getInstance()
         monthTransactions.filter {
             cal.timeInMillis = it.occurredAtEpochMs
+            cal.get(Calendar.YEAR) == selectedYear &&
+            cal.get(Calendar.MONTH) == selectedMonth &&
+            cal.get(Calendar.DAY_OF_MONTH) == selectedDay
+        }
+    }
+
+    // Selected day commitments
+    val dayCommitments = remember(commitments, selectedDay, selectedYear, selectedMonth) {
+        val cal = Calendar.getInstance()
+        commitments.filter {
+            cal.timeInMillis = it.dueAtEpochMs
             cal.get(Calendar.YEAR) == selectedYear &&
             cal.get(Calendar.MONTH) == selectedMonth &&
             cal.get(Calendar.DAY_OF_MONTH) == selectedDay
@@ -173,16 +207,34 @@ fun SpendoCalendarScreen(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // Header with Back Button
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                DotMatrixText(text = "Timeline", fontSize = 11.sp, color = SpendoColor.TextSecondary)
-                Text(
-                    text = "Calendar",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = SpendoColor.TextPrimary
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (onNavigateBack != null) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = SpendoColor.TextPrimary
+                        )
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    DotMatrixText(text = "Timeline", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+                    Text(
+                        text = "Calendar",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SpendoColor.TextPrimary
+                    )
+                }
             }
         }
 
@@ -269,6 +321,7 @@ fun SpendoCalendarScreen(
                                                     selectedMonth == deviceNow.get(Calendar.MONTH) &&
                                                     dayNum == deviceNow.get(Calendar.DAY_OF_MONTH))
                                             val hasSpend = daysWithSpend.contains(dayNum)
+                                            val hasCommitment = daysWithCommitments.contains(dayNum)
 
                                             Column(
                                                 modifier = Modifier
@@ -294,18 +347,78 @@ fun SpendoCalendarScreen(
                                                     fontWeight = if (isRealToday || isSelected) FontWeight.Bold else FontWeight.Normal,
                                                     color = if (isSelected) SpendoColor.Background else SpendoColor.TextPrimary
                                                 )
-                                                if (hasSpend && !isSelected) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(4.dp)
-                                                            .clip(CircleShape)
-                                                            .background(SpendoColor.AccentRed)
-                                                    )
+                                                if (!isSelected && (hasSpend || hasCommitment)) {
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        if (hasSpend) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(4.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(SpendoColor.AccentRed)
+                                                            )
+                                                        }
+                                                        if (hasCommitment) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(4.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(SpendoColor.TextSecondary)
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Scheduled Commitments on this Day
+        if (dayCommitments.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "SCHEDULED COMMITMENTS & BILLS",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SpendoColor.TextSecondary
+                    )
+                    dayCommitments.forEach { commitment ->
+                        SpendoCard(contentPadding = 12.dp) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = commitment.title,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp,
+                                        color = SpendoColor.TextPrimary
+                                    )
+                                    Text(
+                                        text = if (commitment.isPaid) "Status: Paid" else "Status: Due",
+                                        fontSize = 11.sp,
+                                        color = if (commitment.isPaid) SpendoColor.TextSecondary else SpendoColor.AccentRed
+                                    )
+                                }
+                                Text(
+                                    text = "₹%,.2f".format(Locale.ENGLISH, commitment.amountPaise / 100.0),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = SpendoColor.TextPrimary
+                                )
                             }
                         }
                     }
@@ -345,7 +458,7 @@ fun SpendoCalendarScreen(
         }
 
         // Selected Day Transactions
-        if (dayTransactions.isEmpty()) {
+        if (dayTransactions.isEmpty() && dayCommitments.isEmpty()) {
             item {
                 SpendoEmptyState(
                     title = "No Expenses Logged",

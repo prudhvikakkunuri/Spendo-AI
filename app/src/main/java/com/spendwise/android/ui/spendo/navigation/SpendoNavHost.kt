@@ -27,36 +27,72 @@ import com.spendwise.android.ui.spendo.screens.SpendoNotificationSettingsScreen
 import com.spendwise.android.ui.spendo.screens.SpendoReviewScreen
 import com.spendwise.android.ui.spendo.screens.SpendoSecurityScreen
 import com.spendwise.android.ui.spendo.screens.SpendoSettingsScreen
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
+import com.spendwise.android.ui.spendo.screens.SpendoMainPagerScreen
 import com.spendwise.android.ui.spendo.screens.SpendoStreaksScreen
 import com.spendwise.android.ui.spendo.screens.SpendoTransactionDetailScreen
+import com.spendwise.android.ui.spendo.screens.SpendoOnboardingScreen
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SpendoNavHost(
     navController: NavHostController,
     uiState: SpendoUiState,
     viewModel: SpendoViewModel,
+    pagerState: PagerState? = null,
     modifier: Modifier = Modifier
 ) {
+    val activePagerState = pagerState ?: rememberPagerState(initialPage = 0, pageCount = { 5 })
+
+    androidx.compose.runtime.LaunchedEffect(uiState.isProfileLoaded, uiState.isOnboardingCompleted) {
+        if (uiState.isProfileLoaded) {
+            val currentRoute = navController.currentDestination?.route
+            if (!uiState.isOnboardingCompleted && currentRoute != SpendoScreen.Onboarding.route) {
+                navController.navigate(SpendoScreen.Onboarding.route) {
+                    popUpTo(0) { inclusive = true }
+                }
+            } else if (uiState.isOnboardingCompleted && currentRoute == SpendoScreen.Onboarding.route) {
+                navController.navigate(SpendoScreen.Home.route) {
+                    popUpTo(SpendoScreen.Onboarding.route) { inclusive = true }
+                }
+            }
+        }
+    }
+
+    val startRoute = if (uiState.isProfileLoaded && !uiState.isOnboardingCompleted) {
+        SpendoScreen.Onboarding.route
+    } else {
+        SpendoScreen.Home.route
+    }
+
     NavHost(
         navController = navController,
-        startDestination = SpendoScreen.Home.route,
+        startDestination = startRoute,
         modifier = modifier
     ) {
-        // SCREEN 1 — HOME DASHBOARD
+        // SCREEN 1 — MAIN PAGER CONTAINER (Home, Wallet, Analytics, Budgets, Profile)
         composable(SpendoScreen.Home.route) {
-            SpendoHomeScreen(
+            SpendoMainPagerScreen(
+                pagerState = activePagerState,
                 uiState = uiState,
+                viewModel = viewModel,
                 onNavigateToAddTransaction = { navController.navigate(SpendoScreen.AddTransaction.route) },
                 onNavigateToAddIncome = { navController.navigate(SpendoScreen.AddTransaction.createRoute(TransactionType.INCOME)) },
                 onNavigateToBanks = { navController.navigate(SpendoScreen.Banks.route) },
-                onNavigateToAnalytics = { navController.navigate(SpendoScreen.Analytics.route) },
-                onNavigateToSettings = { navController.navigate(SpendoScreen.Settings.route) },
                 onNavigateToNotifications = { navController.navigate(SpendoScreen.Notifications.route) },
                 onNavigateToTransactionDetail = { id ->
                     navController.navigate(SpendoScreen.TransactionDetail.createRoute(id))
                 },
-                onNavigateToActivity = { navController.navigate(SpendoScreen.Activity.route) },
-                onNavigateToReview = { navController.navigate(SpendoScreen.Review.route) }
+                onNavigateToReview = { navController.navigate(SpendoScreen.Review.route) },
+                onNavigateToSecurity = { navController.navigate(SpendoScreen.Security.route) },
+                onNavigateToIncome = { navController.navigate(SpendoScreen.Income.route) },
+                onNavigateToStreaks = { navController.navigate(SpendoScreen.Streaks.route) },
+                onNavigateToAiConfig = { navController.navigate(SpendoScreen.AiConfig.route) },
+                onNavigateToNotificationSettings = { navController.navigate(SpendoScreen.NotificationSettings.route) },
+                onNavigateToImportExport = { navController.navigate(SpendoScreen.ImportExport.route) },
+                onNavigateToCalendar = { navController.navigate(SpendoScreen.Calendar.route) }
             )
         }
 
@@ -70,7 +106,8 @@ fun SpendoNavHost(
                 onNavigateToAddTransaction = { navController.navigate(SpendoScreen.AddTransaction.route) },
                 onNavigateToTransactionDetail = { id ->
                     navController.navigate(SpendoScreen.TransactionDetail.createRoute(id))
-                }
+                },
+                onNavigateToCalendar = { navController.navigate(SpendoScreen.Calendar.route) }
             )
         }
 
@@ -81,7 +118,8 @@ fun SpendoNavHost(
                 onSelectDay = { viewModel.selectCalendarDay(it) },
                 onNavigateToTransactionDetail = { id ->
                     navController.navigate(SpendoScreen.TransactionDetail.createRoute(id))
-                }
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -225,7 +263,11 @@ fun SpendoNavHost(
             SpendoNotificationSettingsScreen(
                 uiState = uiState,
                 onToggleDetection = { viewModel.toggleNotificationDetection(it) },
-                onToggleApp = { viewModel.toggleAppMonitored(it) },
+                onToggleApp = { pkg, isEnabled -> viewModel.toggleAppMonitored(pkg, isEnabled) },
+                onRefreshPermission = { viewModel.refreshNotificationAccess() },
+                onToneChange = { viewModel.setNotificationPersonalityTone(it) },
+                onTestParse = { viewModel.testParseNotification(it) },
+                onClearTestResult = { viewModel.clearTestParseResult() },
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -245,6 +287,13 @@ fun SpendoNavHost(
             SpendoSettingsScreen(
                 currentThemeMode = uiState.themeMode,
                 onThemeModeChange = { viewModel.setThemeMode(it) },
+                userName = uiState.userName,
+                monthlyIncomePaise = uiState.monthlyIncomePaise,
+                incomeFrequency = uiState.incomeFrequency,
+                dailyLimitPaise = uiState.dailyLimitPaise,
+                onUpdateProfile = { name, salary, freq, limit ->
+                    viewModel.updateProfile(name, salary, freq, limit)
+                },
                 onNavigateToSecurity = { navController.navigate(SpendoScreen.Security.route) },
                 onNavigateToBanks = { navController.navigate(SpendoScreen.Banks.route) },
                 onNavigateToBudgets = { navController.navigate(SpendoScreen.Budget.route) },
@@ -287,8 +336,21 @@ fun SpendoNavHost(
                 onNavigateBack = { navController.popBackStack() },
                 onApprove = { id -> viewModel.approveReviewTransaction(id) },
                 onReject = { id -> viewModel.rejectReviewTransaction(id) },
-                onUpdateAndApprove = { id, merchant, amountPaise, category, bank, rememberPref ->
-                    viewModel.updateAndApproveReviewTransaction(id, merchant, amountPaise, category, bank, rememberPref)
+                onUpdateAndApprove = { id, merchant, amountPaise, category, bank, bankAccountId, rememberPref ->
+                    viewModel.updateAndApproveReviewTransaction(id, merchant, amountPaise, category, bank, bankAccountId, rememberPref)
+                },
+                onNavigateToBankAccounts = { navController.navigate(SpendoScreen.Banks.route) }
+            )
+        }
+
+        // ONBOARDING DESTINATION
+        composable(SpendoScreen.Onboarding.route) {
+            SpendoOnboardingScreen(
+                onFinishOnboarding = { name, salaryPaise, frequency, dailyLimitPaise, accounts ->
+                    viewModel.completeOnboarding(name, salaryPaise, frequency, accounts, dailyLimitPaise ?: 250000L)
+                    navController.navigate(SpendoScreen.Home.route) {
+                        popUpTo(SpendoScreen.Onboarding.route) { inclusive = true }
+                    }
                 }
             )
         }

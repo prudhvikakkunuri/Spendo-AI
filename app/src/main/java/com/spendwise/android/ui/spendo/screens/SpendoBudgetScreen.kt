@@ -52,12 +52,12 @@ fun SpendoBudgetScreen(
     val dailyLimitRupees = uiState.dailyLimitPaise / 100.0
     val todaySpentRupees = uiState.todaySpentPaise / 100.0
     val dailyRemaining = (dailyLimitRupees - todaySpentRupees).coerceAtLeast(0.0)
-    val dailyProgress = (todaySpentRupees / dailyLimitRupees).coerceIn(0.0, 1.0).toFloat()
+    val dailyProgress = if (dailyLimitRupees > 0.0) (todaySpentRupees / dailyLimitRupees).coerceIn(0.0, 1.0).toFloat() else 0f
 
     val monthlyLimitRupees = uiState.monthlyLimitPaise / 100.0
     val monthSpentRupees = uiState.monthSpentPaise / 100.0
     val monthlyRemaining = (monthlyLimitRupees - monthSpentRupees).coerceAtLeast(0.0)
-    val monthlyProgress = (monthSpentRupees / monthlyLimitRupees).coerceIn(0.0, 1.0).toFloat()
+    val monthlyProgress = if (monthlyLimitRupees > 0.0) (monthSpentRupees / monthlyLimitRupees).coerceIn(0.0, 1.0).toFloat() else 0f
 
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -109,7 +109,7 @@ fun SpendoBudgetScreen(
                             .fillMaxWidth()
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp)),
-                        color = if (dailyProgress > 0.85f) SpendoColor.AccentRed else SpendoColor.SuccessGreen,
+                        color = if (dailyProgress > 0.85f) SpendoColor.AccentRed else SpendoColor.CardDarkText,
                         trackColor = SpendoColor.DarkTrack
                     )
 
@@ -189,48 +189,64 @@ fun SpendoBudgetScreen(
                 }
             }
 
-            // Category Budgets Breakdown
+            // Category Spending Breakdown
             SpendoCard(contentPadding = 18.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    DotMatrixText(text = "Category Allowances", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+                    DotMatrixText(text = "Category Expenses", fontSize = 11.sp, color = SpendoColor.TextSecondary)
 
-                    val categoryBudgets = listOf(
-                        Triple("Food & Dining", 12000.0, 6800.0),
-                        Triple("Transit & Rides", 4500.0, 2900.0),
-                        Triple("Groceries", 15000.0, 9400.0),
-                        Triple("Shopping", 8000.0, 4200.0),
-                        Triple("Entertainment", 5000.0, 2100.0)
-                    )
+                    val expenseTransactions = uiState.transactions.filter { it.type == com.spendwise.android.ui.spendo.model.TransactionType.EXPENSE }
+                    val categorySpending = expenseTransactions
+                        .groupBy { it.category }
+                        .mapValues { (_, txs) -> txs.sumOf { it.amountPaise } / 100.0 }
+                        .toList()
+                        .sortedByDescending { it.second }
 
-                    categoryBudgets.forEach { (category, max, current) ->
-                        val fraction = (current / max).toFloat()
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = category,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = SpendoColor.TextPrimary
-                                )
-                                Text(
-                                    text = "₹%,.0f / ₹%,.0f".format(current, max),
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 11.sp,
-                                    color = SpendoColor.TextSecondary
+                    val totalSpent = categorySpending.sumOf { it.second }
+
+                    if (categorySpending.isEmpty()) {
+                        Text(
+                            text = "No category expenses recorded yet. Actual expenses will appear here automatically.",
+                            fontSize = 12.sp,
+                            color = SpendoColor.TextSecondary
+                        )
+                    } else {
+                        categorySpending.forEach { (category, current) ->
+                            val fraction = if (totalSpent > 0.0) (current / totalSpent).coerceIn(0.0, 1.0).toFloat() else 0f
+                            val pct = (fraction * 100).toInt()
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = category,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = SpendoColor.TextPrimary,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "₹%,.2f (%d%%)".format(current, pct),
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.sp,
+                                        color = SpendoColor.TextSecondary,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                                LinearProgressIndicator(
+                                    progress = { fraction },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(1.5.dp)),
+                                    color = SpendoColor.TextPrimary,
+                                    trackColor = SpendoColor.SurfaceVariant
                                 )
                             }
-                            LinearProgressIndicator(
-                                progress = { fraction },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(3.dp)
-                                    .clip(RoundedCornerShape(1.5.dp)),
-                                color = if (fraction > 0.85f) SpendoColor.AccentRed else SpendoColor.TextPrimary,
-                                trackColor = SpendoColor.SurfaceVariant
-                            )
                         }
                     }
                 }
@@ -243,7 +259,7 @@ fun SpendoBudgetScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(84.dp))
         }
     }
 

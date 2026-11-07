@@ -16,7 +16,7 @@ export const Hero: React.FC = () => {
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#27272E] light:border-[#E4E4E7] bg-[#121215] light:bg-[#FFFFFF] shadow-sm">
               <span className="dot-indicator-red animate-pulse" />
               <span className="font-mono-tech text-xs tracking-wider uppercase text-[#A1A1AA] light:text-[#71717A]">
-                SPENDO V0.1.0 // ON-DEVICE AI MONEY AGENT
+                SPENDO V1.0.0 // ON-DEVICE AI MONEY AGENT
               </span>
             </div>
 

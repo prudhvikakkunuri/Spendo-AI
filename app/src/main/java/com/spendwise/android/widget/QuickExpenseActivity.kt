@@ -268,7 +268,7 @@ private fun QuickExpenseDialogContent(
                         screenState = QuickExpenseScreenState.ERROR
                     }
                     else -> {
-                        statusMessage = "Could not detect expense details in: \"$transcript\". Try: \"Spent 250 on lunch\""
+                        statusMessage = "I couldn't identify an expense. Try saying \"I spent 250 rupees on lunch.\""
                         screenState = QuickExpenseScreenState.ERROR
                     }
                 }
@@ -358,11 +358,11 @@ private fun QuickExpenseDialogContent(
         }
     }
 
-    // Outer backdrop box to dim screen and detect outside taps
+    // Outer backdrop box to detect outside taps without drawing an opaque black screen
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.65f))
+            .background(Color.Transparent)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -371,7 +371,7 @@ private fun QuickExpenseDialogContent(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Floating Card
+        // Compact Floating Card
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
@@ -399,7 +399,7 @@ private fun QuickExpenseDialogContent(
                         modifier = Modifier
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(if (isMicrophoneActive) Color(0xFFFF453A) else Color(0xFFB7F34A))
+                            .background(if (isMicrophoneActive) Color(0xFFFF453A) else Color.White)
                     )
                     Text(
                         text = if (screenState == QuickExpenseScreenState.RECORDING) "VOICE EXPENSE ENTRY" else "CONFIRM EXPENSE",
@@ -430,10 +430,10 @@ private fun QuickExpenseDialogContent(
                         modifier = Modifier
                             .size(72.dp)
                             .clip(CircleShape)
-                            .background(if (isMicrophoneActive) Color(0x33FF453A) else Color(0x22B7F34A))
+                            .background(if (isMicrophoneActive) Color(0x33FF453A) else Color(0x22FFFFFF))
                             .border(
                                 2.dp,
-                                if (isMicrophoneActive) Color(0xFFFF453A) else Color(0xFFB7F34A),
+                                if (isMicrophoneActive) Color(0xFFFF453A) else Color.White,
                                 CircleShape
                             ),
                         contentAlignment = Alignment.Center
@@ -458,7 +458,7 @@ private fun QuickExpenseDialogContent(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "\"$recognizedTranscript\"",
-                            color = Color(0xFFB7F34A),
+                            color = Color.White,
                             fontSize = 13.sp,
                             fontFamily = FontFamily.Monospace,
                             textAlign = TextAlign.Center
@@ -543,7 +543,7 @@ private fun QuickExpenseDialogContent(
                                 .weight(1f)
                                 .height(42.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFB7F34A))
+                                .background(Color.White)
                                 .clickable {
                                     screenState = QuickExpenseScreenState.MANUAL_ENTRY
                                 },
@@ -592,7 +592,7 @@ private fun QuickExpenseDialogContent(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFFB7F34A),
+                                focusedBorderColor = Color.White,
                                 unfocusedBorderColor = Color(0xFF333333),
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White
@@ -609,7 +609,7 @@ private fun QuickExpenseDialogContent(
                             placeholder = { Text("e.g. Lunch at Cafe", color = Color(0xFF555555)) },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFFB7F34A),
+                                focusedBorderColor = Color.White,
                                 unfocusedBorderColor = Color(0xFF333333),
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White
@@ -639,7 +639,7 @@ private fun QuickExpenseDialogContent(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(16.dp))
-                                    .background(if (isSelected) Color(0xFFB7F34A) else Color(0xFF222222))
+                                    .background(if (isSelected) Color.White else Color(0xFF222222))
                                     .clickable { selectedCategory = cat }
                                     .padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
@@ -686,7 +686,7 @@ private fun QuickExpenseDialogContent(
                                         .background(if (isSelected) Color(0xFF333333) else Color(0xFF1E1E1E))
                                         .border(
                                             1.dp,
-                                            if (isSelected) Color(0xFFB7F34A) else Color(0xFF2A2A2A),
+                                            if (isSelected) Color.White else Color(0xFF2A2A2A),
                                             RoundedCornerShape(16.dp)
                                         )
                                         .clickable { selectedBank = account }
@@ -694,7 +694,7 @@ private fun QuickExpenseDialogContent(
                                 ) {
                                     Text(
                                         text = "$name (${account.maskedAccountNumber})",
-                                        color = if (isSelected) Color(0xFFB7F34A) else Color(0xFF888888),
+                                        color = if (isSelected) Color.White else Color(0xFF888888),
                                         fontSize = 11.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                     )
@@ -730,14 +730,14 @@ private fun QuickExpenseDialogContent(
                                 .weight(1.3f)
                                 .height(46.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSaving) Color(0xFF555555) else Color(0xFFB7F34A))
+                                .background(if (isSaving) Color(0xFF555555) else Color.White)
                                 .clickable(enabled = !isSaving) { saveExpenseToDb() },
                             contentAlignment = Alignment.Center
                         ) {
                             if (isSaving) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(20.dp),
-                                    color = Color.White,
+                                    color = Color.Black,
                                     strokeWidth = 2.dp
                                 )
                             } else {

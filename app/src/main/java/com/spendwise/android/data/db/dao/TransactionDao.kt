@@ -55,6 +55,9 @@ interface TransactionDao {
     @Query("DELETE FROM transactions")
     suspend fun deleteAllTransactions()
 
+    @Query("SELECT COUNT(*) FROM transactions WHERE bankAccountId = :bankAccountId")
+    suspend fun getTransactionCountForAccount(bankAccountId: String): Int
+
     @Query("""
         SELECT COALESCE(SUM(amountPaise), 0) FROM transactions 
         WHERE direction = 'DEBIT' 
@@ -138,6 +141,9 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions WHERE reviewStatus = 'NEEDS_REVIEW'")
     fun getPendingReviewCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM transactions WHERE reviewStatus = 'NEEDS_REVIEW'")
+    suspend fun getPendingReviewCountDirect(): Int
+
     @Query("""
         SELECT * FROM transactions 
         WHERE amountPaise = :amountPaise 
@@ -160,24 +166,25 @@ interface TransactionDao {
 
     @Query("""
         SELECT * FROM transactions 
-        WHERE (merchant LIKE '%' || :query || '%' OR note LIKE '%' || :query || '%' OR categoryId LIKE '%' || :query || '%')
+        WHERE reviewStatus = 'CONFIRMED'
+          AND (merchant LIKE '%' || :query || '%' OR note LIKE '%' || :query || '%' OR categoryId LIKE '%' || :query || '%')
         ORDER BY occurredAtEpochMillis DESC
     """)
     fun searchTransactions(query: String): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE direction = :direction ORDER BY occurredAtEpochMillis DESC")
+    @Query("SELECT * FROM transactions WHERE reviewStatus = 'CONFIRMED' AND direction = :direction ORDER BY occurredAtEpochMillis DESC")
     fun getTransactionsByDirection(direction: String): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE categoryId = :categoryId ORDER BY occurredAtEpochMillis DESC")
+    @Query("SELECT * FROM transactions WHERE reviewStatus = 'CONFIRMED' AND categoryId = :categoryId ORDER BY occurredAtEpochMillis DESC")
     fun getTransactionsByCategory(categoryId: String): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE occurredAtEpochMillis >= :startTime AND occurredAtEpochMillis <= :endTime ORDER BY occurredAtEpochMillis DESC")
+    @Query("SELECT * FROM transactions WHERE reviewStatus = 'CONFIRMED' AND occurredAtEpochMillis >= :startTime AND occurredAtEpochMillis <= :endTime ORDER BY occurredAtEpochMillis DESC")
     fun getTransactionsInDateRange(startTime: Long, endTime: Long): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE bankAccountName = :bankAccountName OR bankAccountId = :bankAccountName ORDER BY occurredAtEpochMillis DESC")
+    @Query("SELECT * FROM transactions WHERE reviewStatus = 'CONFIRMED' AND (bankAccountName = :bankAccountName OR bankAccountId = :bankAccountName) ORDER BY occurredAtEpochMillis DESC")
     fun getTransactionsForBank(bankAccountName: String): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE merchant LIKE '%' || :merchantQuery || '%' ORDER BY occurredAtEpochMillis DESC")
+    @Query("SELECT * FROM transactions WHERE reviewStatus = 'CONFIRMED' AND merchant LIKE '%' || :merchantQuery || '%' ORDER BY occurredAtEpochMillis DESC")
     fun getTransactionsForMerchant(merchantQuery: String): Flow<List<TransactionEntity>>
 
     @Query("SELECT COALESCE(SUM(amountPaise), 0) FROM transactions WHERE merchant LIKE '%' || :merchantQuery || '%' AND direction = 'DEBIT' AND reviewStatus = 'CONFIRMED'")

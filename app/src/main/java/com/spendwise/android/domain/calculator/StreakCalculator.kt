@@ -160,4 +160,60 @@ object StreakCalculator {
 
         return Pair(start, end)
     }
+
+    /**
+     * Calculates the consecutive daily logging streak according to the official definition:
+     * A streak counts consecutive calendar days on which the user recorded at least one eligible expense,
+     * ending today if an expense was recorded today or yesterday if today has not yet had an expense.
+     * Do not count income or transfers as expense-tracking activity.
+     */
+    fun calculateLoggingStreak(
+        expenseDatesEpochMs: List<Long>,
+        nowEpochMs: Long = System.currentTimeMillis(),
+        timeZone: TimeZone = TimeZone.getDefault()
+    ): Int {
+        if (expenseDatesEpochMs.isEmpty()) return 0
+
+        val cal = Calendar.getInstance(timeZone)
+
+        fun toDayKey(epochMs: Long): Int {
+            cal.timeInMillis = epochMs
+            val y = cal.get(Calendar.YEAR)
+            val m = cal.get(Calendar.MONTH) + 1
+            val d = cal.get(Calendar.DAY_OF_MONTH)
+            return y * 10000 + m * 100 + d
+        }
+
+        val recordedDays = expenseDatesEpochMs.map { toDayKey(it) }.toSet()
+
+        val todayKey = toDayKey(nowEpochMs)
+
+        cal.timeInMillis = nowEpochMs
+        cal.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterdayKey = toDayKey(cal.timeInMillis)
+
+        val startingKey = when {
+            recordedDays.contains(todayKey) -> todayKey
+            recordedDays.contains(yesterdayKey) -> yesterdayKey
+            else -> return 0
+        }
+
+        var streak = 0
+        cal.timeInMillis = nowEpochMs
+        if (startingKey == yesterdayKey) {
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+        }
+
+        while (true) {
+            val key = toDayKey(cal.timeInMillis)
+            if (recordedDays.contains(key)) {
+                streak++
+                cal.add(Calendar.DAY_OF_YEAR, -1)
+            } else {
+                break
+            }
+        }
+
+        return streak
+    }
 }

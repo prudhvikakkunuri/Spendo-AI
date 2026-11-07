@@ -28,7 +28,7 @@ export const DownloadSection: React.FC = () => {
             <div className="p-4 rounded-2xl border border-[#27272E] light:border-[#E4E4E7] bg-[#09090B] light:bg-[#F4F4F5] font-mono-tech text-xs text-left min-w-[200px] space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-[#71717A]">VERSION:</span>
-                <span className="font-bold text-white light:text-black">v0.1.0 dev</span>
+                <span className="font-bold text-white light:text-black">v1.0.0 dev</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#71717A]">TARGET:</span>
@@ -40,7 +40,7 @@ export const DownloadSection: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-[#71717A]">SIZE:</span>
-                <span className="text-white light:text-black">~17.3 MB</span>
+                <span className="text-white light:text-black">~18.5 MB</span>
               </div>
             </div>
           </div>

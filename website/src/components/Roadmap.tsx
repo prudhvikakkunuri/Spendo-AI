@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Clock, Calendar, Sparkles } from 'lucide-react';
+import { CheckCircle2, Clock, Calendar } from 'lucide-react';
 
 interface RoadmapItem {
   title: string;
   category: string;
   description: string;
-  status: 'available' | 'in-progress' | 'planned' | 'exploring';
+  status: 'available' | 'in-progress' | 'planned';
 }
 
 export const Roadmap: React.FC = () => {
@@ -74,13 +74,6 @@ export const Roadmap: React.FC = () => {
       category: "DATA IMPORT",
       description: "Client-side PDF parser for importing historical bank statements from supported Indian banks.",
       status: "planned"
-    },
-    // Exploring
-    {
-      title: "On-Device Quantized SLM",
-      category: "RESEARCH",
-      description: "Executing a lightweight 2B parameter financial model directly on mobile NPU via MediaPipe or ONNX Runtime.",
-      status: "exploring"
     }
   ];
 
@@ -109,13 +102,6 @@ export const Roadmap: React.FC = () => {
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono-tech bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/30">
             <Calendar className="w-3 h-3" />
             PLANNED
-          </span>
-        );
-      case 'exploring':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono-tech bg-[#A855F7]/10 text-[#A855F7] border border-[#A855F7]/30">
-            <Sparkles className="w-3 h-3" />
-            EXPLORING
           </span>
         );
     }

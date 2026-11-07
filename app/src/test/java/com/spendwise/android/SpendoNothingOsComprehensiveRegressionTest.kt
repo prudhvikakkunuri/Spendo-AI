@@ -341,6 +341,9 @@ class SpendoNothingOsComprehensiveRegressionTest {
         override fun getPendingReviewCount(): Flow<Int> =
             flowOf(transactions.count { it.reviewStatus == "NEEDS_REVIEW" })
 
+        override suspend fun getPendingReviewCountDirect(): Int =
+            transactions.count { it.reviewStatus == "NEEDS_REVIEW" }
+
         override suspend fun updateReviewStatus(id: String, newStatus: String, updatedAt: Long) {
             val idx = transactions.indexOfFirst { it.id == id }
             if (idx >= 0) transactions[idx] = transactions[idx].copy(reviewStatus = newStatus, updatedAtEpochMillis = updatedAt)
@@ -385,5 +388,8 @@ class SpendoNothingOsComprehensiveRegressionTest {
         override suspend fun deleteAllTransactions() {
             transactions.clear()
         }
+
+        override suspend fun getTransactionCountForAccount(bankAccountId: String): Int =
+            transactions.count { it.bankAccountId == bankAccountId }
     }
 }

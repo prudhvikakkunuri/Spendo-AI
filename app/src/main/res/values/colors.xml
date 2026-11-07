@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="charcoal_surface">#121417</color>
-    <color name="charcoal_bg">#0D0F11</color>
-    <color name="lime_accent">#B4F234</color>
+    <!-- Official Spendo Brand Palette -->
+    <color name="black">#000000</color>
+    <color name="background_primary">#000000</color>
+    <color name="background_secondary">#0A0A0A</color>
+    <color name="surface_dark">#141414</color>
+    <color name="surface_elevated">#1C1C1E</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#A0A0A0</color>
+    <color name="border_dark">#353535</color>
+    <color name="spendo_red">#E60023</color>
     <color name="white">#FFFFFF</color>
+
+    <!-- Backward-compatible legacy tokens mapped to official monochrome theme -->
+    <color name="charcoal_surface">#141414</color>
+    <color name="charcoal_bg">#000000</color>
 </resources>

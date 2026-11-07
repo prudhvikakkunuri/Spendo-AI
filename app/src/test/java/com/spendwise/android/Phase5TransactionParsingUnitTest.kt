@@ -447,9 +447,9 @@ class Phase5TransactionParsingUnitTest {
         )
         ingestionEngine.onNotificationReceived(payloadConfirmed)
 
-        assertEquals("Confirmed transaction must be saved", 1, fakeDao.transactions.size)
+        assertEquals("Detected transaction must enter review queue", 1, fakeDao.transactions.size)
         val firstSaved = fakeDao.transactions.first()
-        assertEquals("CONFIRMED", firstSaved.reviewStatus)
+        assertEquals("NEEDS_REVIEW", firstSaved.reviewStatus)
         assertEquals(35000L, firstSaved.amountPaise)
         assertEquals("Swiggy", firstSaved.merchant)
 
@@ -547,6 +547,9 @@ class Phase5TransactionParsingUnitTest {
         override fun getPendingReviewCount(): Flow<Int> =
             flowOf(transactions.count { it.reviewStatus == "NEEDS_REVIEW" })
 
+        override suspend fun getPendingReviewCountDirect(): Int =
+            transactions.count { it.reviewStatus == "NEEDS_REVIEW" }
+
         override suspend fun findPotentialDuplicates(
             amountPaise: Long,
             direction: String,
@@ -595,5 +598,8 @@ class Phase5TransactionParsingUnitTest {
 
         override suspend fun getMerchantTotalSpendDirect(merchantQuery: String): Long =
             transactions.filter { it.merchant?.contains(merchantQuery, ignoreCase = true) == true && it.direction == "DEBIT" && it.reviewStatus == "CONFIRMED" }.sumOf { it.amountPaise }
+
+        override suspend fun getTransactionCountForAccount(bankAccountId: String): Int =
+            transactions.count { it.bankAccountId == bankAccountId }
     }
 }

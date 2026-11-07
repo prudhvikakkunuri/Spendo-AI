@@ -63,6 +63,9 @@ class SpendoFinancialRepository(
         try {
             val ctx = com.spendwise.android.SpendWiseApplication.instance
             com.spendwise.android.widget.SpendoWidgetProvider.updateAllWidgets(ctx)
+            coroutineScope.launch {
+                com.spendwise.android.notification.SpendoNotificationHelper.checkAndNotifyBudgetThreshold(ctx)
+            }
         } catch (_: Exception) {}
     }
 
@@ -156,10 +159,11 @@ class SpendoFinancialRepository(
             bankAccountName = bankAccountName,
             bankAccountId = bankAccountId
         )
-        transactionDao.insertTransaction(entity)
-
-        // Adjust bank account balance (debit deducts)
-        adjustBankBalance(bankAccountId, bankAccountName, -amountPaise)
+        database.withTransaction {
+            transactionDao.insertTransaction(entity)
+            // Adjust bank account balance (debit deducts)
+            adjustBankBalance(bankAccountId, bankAccountName, -amountPaise)
+        }
         notifyWidgetUpdate()
         return id
     }
@@ -191,10 +195,11 @@ class SpendoFinancialRepository(
             bankAccountName = bankAccountName,
             bankAccountId = bankAccountId
         )
-        transactionDao.insertTransaction(entity)
-
-        // Adjust bank account balance (credit adds)
-        adjustBankBalance(bankAccountId, bankAccountName, amountPaise)
+        database.withTransaction {
+            transactionDao.insertTransaction(entity)
+            // Adjust bank account balance (credit adds)
+            adjustBankBalance(bankAccountId, bankAccountName, amountPaise)
+        }
         notifyWidgetUpdate()
         return id
     }
@@ -211,40 +216,50 @@ class SpendoFinancialRepository(
         bankAccountId: String? = null
     ) {
         require(amountPaise > 0) { "Updated amount must be strictly positive integer paise" }
-        val existing = transactionDao.getTransactionByIdDirect(id) ?: return
-        val direction = if (type == TransactionType.EXPENSE) "DEBIT" else "CREDIT"
+        database.withTransaction {
+            val existing = transactionDao.getTransactionByIdDirect(id) ?: return@withTransaction
+            val direction = if (type == TransactionType.EXPENSE) "DEBIT" else "CREDIT"
 
-        // 1. Reverse previous balance impact
-        val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
-        adjustBankBalance(existing.bankAccountId, existing.bankAccountName, reverseDelta)
+            if (existing.reviewStatus == "CONFIRMED") {
+                // 1. Reverse previous balance impact
+                val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
+                adjustBankBalance(existing.bankAccountId, existing.bankAccountName, reverseDelta)
 
-        // 2. Apply new balance impact
-        val applyDelta = if (direction == "DEBIT") -amountPaise else amountPaise
-        val targetBankId = bankAccountId ?: existing.bankAccountId
-        adjustBankBalance(targetBankId, bankAccountName, applyDelta)
+                // 2. Apply new balance impact
+                val applyDelta = if (direction == "DEBIT") -amountPaise else amountPaise
+                val targetBankId = bankAccountId ?: existing.bankAccountId
+                adjustBankBalance(targetBankId, bankAccountName, applyDelta)
+            }
 
-        val updated = existing.copy(
-            merchant = merchant,
-            amountPaise = amountPaise,
-            direction = direction,
-            categoryId = category,
-            bankAccountName = bankAccountName,
-            bankAccountId = targetBankId,
-            note = note,
-            occurredAtEpochMillis = occurredAtEpochMs,
-            updatedAtEpochMillis = System.currentTimeMillis()
-        )
-        transactionDao.updateTransaction(updated)
+            val targetBankId = bankAccountId ?: existing.bankAccountId
+            val updated = existing.copy(
+                merchant = merchant,
+                amountPaise = amountPaise,
+                direction = direction,
+                categoryId = category,
+                bankAccountName = bankAccountName,
+                bankAccountId = targetBankId,
+                note = note,
+                occurredAtEpochMillis = occurredAtEpochMs,
+                updatedAtEpochMillis = System.currentTimeMillis()
+            )
+            transactionDao.updateTransaction(updated)
+        }
         notifyWidgetUpdate()
     }
 
     suspend fun deleteTransaction(id: String) {
-        val existing = transactionDao.getTransactionByIdDirect(id) ?: return
-        transactionDao.deleteTransactionById(id)
+        database.withTransaction {
+            val existing = transactionDao.getTransactionByIdDirect(id) ?: return@withTransaction
+            transactionDao.deleteTransactionById(id)
 
-        // Reverse balance impact if bank known
-        val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
-        adjustBankBalance(existing.bankAccountId, existing.bankAccountName, reverseDelta)
+            // Only reverse balance impact if the transaction was CONFIRMED.
+            // Pending (NEEDS_REVIEW) and REJECTED transactions never altered balances.
+            if (existing.reviewStatus == "CONFIRMED") {
+                val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
+                adjustBankBalance(existing.bankAccountId, existing.bankAccountName, reverseDelta)
+            }
+        }
         notifyWidgetUpdate()
     }
 
@@ -253,17 +268,22 @@ class SpendoFinancialRepository(
     // -------------------------------------------------------------
 
     suspend fun approveReviewTransaction(id: String) {
-        val tx = transactionDao.getTransactionByIdDirect(id) ?: return
-        transactionDao.updateReviewStatus(id, "CONFIRMED")
-        tx.bankAccountName?.let { bankName ->
+        database.withTransaction {
+            val tx = transactionDao.getTransactionByIdDirect(id) ?: return@withTransaction
+            if (tx.reviewStatus == "CONFIRMED") return@withTransaction // Strict idempotency guard against double-approvals
+            transactionDao.updateReviewStatus(id, "CONFIRMED")
             val delta = if (tx.direction == "DEBIT") -tx.amountPaise else tx.amountPaise
-            adjustBankBalanceByName(bankName, delta)
+            adjustBankBalance(tx.bankAccountId, tx.bankAccountName, delta)
         }
         notifyWidgetUpdate()
     }
 
     suspend fun rejectReviewTransaction(id: String) {
-        transactionDao.deleteTransactionById(id)
+        database.withTransaction {
+            val tx = transactionDao.getTransactionByIdDirect(id) ?: return@withTransaction
+            // Mark as REJECTED so it is safely archived/removed from queue without altering ledger or balances
+            transactionDao.updateReviewStatus(id, "REJECTED")
+        }
         notifyWidgetUpdate()
     }
 
@@ -273,25 +293,48 @@ class SpendoFinancialRepository(
         amountPaise: Long,
         category: String,
         bankAccountName: String,
+        bankAccountId: String? = null,
         rememberMerchantPreference: Boolean = false
     ) {
-        val tx = transactionDao.getTransactionByIdDirect(id) ?: return
-        val updated = tx.copy(
-            merchant = merchant,
-            amountPaise = amountPaise,
-            categoryId = category,
-            bankAccountName = bankAccountName,
-            reviewStatus = "CONFIRMED",
-            updatedAtEpochMillis = System.currentTimeMillis()
-        )
-        transactionDao.updateTransaction(updated)
-        val delta = if (tx.direction == "DEBIT") -amountPaise else amountPaise
-        adjustBankBalanceByName(bankAccountName, delta)
+        database.withTransaction {
+            val tx = transactionDao.getTransactionByIdDirect(id) ?: return@withTransaction
+            if (tx.reviewStatus == "CONFIRMED") return@withTransaction
+            val targetBankId = bankAccountId ?: tx.bankAccountId
+            val updated = tx.copy(
+                merchant = merchant,
+                amountPaise = amountPaise,
+                categoryId = category,
+                bankAccountName = bankAccountName,
+                bankAccountId = targetBankId,
+                reviewStatus = "CONFIRMED",
+                updatedAtEpochMillis = System.currentTimeMillis()
+            )
+            transactionDao.updateTransaction(updated)
+            val delta = if (tx.direction == "DEBIT") -amountPaise else amountPaise
+            adjustBankBalance(targetBankId, bankAccountName, delta)
 
-        if (rememberMerchantPreference && merchant.isNotBlank()) {
-            setMerchantCategoryRule(merchant, category)
+            if (rememberMerchantPreference && merchant.isNotBlank()) {
+                setMerchantCategoryRule(merchant, category)
+            }
         }
         notifyWidgetUpdate()
+    }
+
+    suspend fun updateReviewTransactionAccount(
+        id: String,
+        bankAccountId: String,
+        bankAccountName: String
+    ) {
+        database.withTransaction {
+            val tx = transactionDao.getTransactionByIdDirect(id) ?: return@withTransaction
+            if (tx.reviewStatus != "NEEDS_REVIEW") return@withTransaction
+            val updated = tx.copy(
+                bankAccountId = bankAccountId,
+                bankAccountName = bankAccountName,
+                updatedAtEpochMillis = System.currentTimeMillis()
+            )
+            transactionDao.updateTransaction(updated)
+        }
     }
 
     suspend fun setMerchantCategoryRule(merchant: String, category: String) {
@@ -577,7 +620,7 @@ class SpendoFinancialRepository(
         bankName: String,
         accountType: String,
         initialBalancePaise: Long,
-        maskedNumber: String = "•••• ${(1000..9999).random()}",
+        maskedNumber: String = "",
         accountNickname: String? = null,
         notes: String? = null
     ): String {
@@ -644,33 +687,36 @@ class SpendoFinancialRepository(
         require(amountPaise > 0) { "Transfer amount must be strictly positive" }
         require(sourceAccountId != destinationAccountId) { "Source and destination accounts must be different" }
 
-        val sourceAccount = bankAccountDao.getBankAccountByIdDirect(sourceAccountId) ?: return
-        val destAccount = bankAccountDao.getBankAccountByIdDirect(destinationAccountId) ?: return
+        database.withTransaction {
+            val sourceAccount = bankAccountDao.getBankAccountByIdDirect(sourceAccountId) ?: return@withTransaction
+            val destAccount = bankAccountDao.getBankAccountByIdDirect(destinationAccountId) ?: return@withTransaction
 
-        // 1. Deduct from source
-        adjustBankBalanceById(sourceAccountId, -amountPaise)
-        // 2. Credit to destination
-        adjustBankBalanceById(destinationAccountId, amountPaise)
+            // 1. Deduct from source
+            adjustBankBalanceById(sourceAccountId, -amountPaise)
+            // 2. Credit to destination
+            adjustBankBalanceById(destinationAccountId, amountPaise)
 
-        // 3. Record internal transfer transaction
-        val now = System.currentTimeMillis()
-        val tx = TransactionEntity(
-            id = "tx_${UUID.randomUUID()}",
-            amountPaise = amountPaise,
-            currencyCode = "INR",
-            direction = "TRANSFER",
-            merchant = "Transfer: ${sourceAccount.bankName} ➔ ${destAccount.bankName}",
-            note = note ?: "Internal account transfer",
-            categoryId = "TRANSFER",
-            occurredAtEpochMillis = now,
-            sourceType = "MANUAL",
-            reviewStatus = "CONFIRMED",
-            createdAtEpochMillis = now,
-            updatedAtEpochMillis = now,
-            bankAccountId = sourceAccountId,
-            bankAccountName = "${sourceAccount.bankName} ➔ ${destAccount.bankName}"
-        )
-        transactionDao.insertTransaction(tx)
+            // 3. Record internal transfer transaction
+            val now = System.currentTimeMillis()
+            val tx = TransactionEntity(
+                id = "tx_${UUID.randomUUID()}",
+                amountPaise = amountPaise,
+                currencyCode = "INR",
+                direction = "TRANSFER",
+                merchant = "Transfer: ${sourceAccount.bankName} ➔ ${destAccount.bankName}",
+                note = note ?: "Internal account transfer",
+                categoryId = "TRANSFER",
+                occurredAtEpochMillis = now,
+                sourceType = "MANUAL",
+                reviewStatus = "CONFIRMED",
+                createdAtEpochMillis = now,
+                updatedAtEpochMillis = now,
+                bankAccountId = sourceAccountId,
+                bankAccountName = "${sourceAccount.bankName} ➔ ${destAccount.bankName}"
+            )
+            transactionDao.insertTransaction(tx)
+        }
+        notifyWidgetUpdate()
     }
 
     suspend fun adjustBankBalanceById(bankAccountId: String, deltaPaise: Long) {
@@ -680,9 +726,13 @@ class SpendoFinancialRepository(
     }
 
     private suspend fun adjustBankBalanceByName(bankName: String, deltaPaise: Long) {
-        val account = bankAccountDao.getBankAccountByNameDirect(bankName) ?: return
-        val newBalance = (account.balancePaise + deltaPaise).coerceAtLeast(0L)
-        bankAccountDao.updateBalance(account.id, newBalance)
+        val matching = bankAccountDao.getBankAccountsByNameDirectList(bankName)
+        if (matching.size == 1) {
+            val account = matching.first()
+            val newBalance = (account.balancePaise + deltaPaise).coerceAtLeast(0L)
+            bankAccountDao.updateBalance(account.id, newBalance)
+        }
+        // If multiple accounts match this bank name, NEVER guess or arbitrarily adjust
     }
 
     private suspend fun adjustBankBalance(bankAccountId: String?, bankAccountName: String?, deltaPaise: Long) {
@@ -813,15 +863,22 @@ class SpendoFinancialRepository(
     }
 
     suspend fun updateTransaction(transaction: TransactionEntity) {
-        val existing = transactionDao.getTransactionByIdDirect(transaction.id)
-        if (existing != null) {
-            val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
-            adjustBankBalance(existing.bankAccountId, existing.bankAccountName, reverseDelta)
+        database.withTransaction {
+            val existing = transactionDao.getTransactionByIdDirect(transaction.id)
+            if (existing != null) {
+                if (existing.reviewStatus == "CONFIRMED") {
+                    val reverseDelta = if (existing.direction == "DEBIT") existing.amountPaise else -existing.amountPaise
+                    adjustBankBalance(existing.bankAccountId, existing.bankAccountName, reverseDelta)
+                }
 
-            val applyDelta = if (transaction.direction == "DEBIT") -transaction.amountPaise else transaction.amountPaise
-            adjustBankBalance(transaction.bankAccountId, transaction.bankAccountName, applyDelta)
+                if (transaction.reviewStatus == "CONFIRMED") {
+                    val applyDelta = if (transaction.direction == "DEBIT") -transaction.amountPaise else transaction.amountPaise
+                    adjustBankBalance(transaction.bankAccountId, transaction.bankAccountName, applyDelta)
+                }
+            }
+            transactionDao.updateTransaction(transaction)
         }
-        transactionDao.updateTransaction(transaction)
+        notifyWidgetUpdate()
     }
 
     suspend fun importTransactionsFromCsv(inputStream: java.io.InputStream): com.spendwise.android.util.CsvImportResult {
@@ -890,70 +947,128 @@ class SpendoFinancialRepository(
     }
 
     // -------------------------------------------------------------
+    // Onboarding & Profile Preferences
+    // -------------------------------------------------------------
+
+    suspend fun hasTransactionsDirect(): Boolean = transactionDao.getAllTransactionIds().isNotEmpty()
+
+    suspend fun hasBankAccountsDirect(): Boolean = bankAccountDao.getBankAccountCount() > 0
+
+    suspend fun completeOnboarding(
+        userName: String,
+        monthlyIncomePaise: Long,
+        incomeFrequency: String,
+        accounts: List<com.spendwise.android.ui.spendo.model.OnboardingBankDraft>,
+        dailyLimitPaise: Long
+    ) {
+        setPreference("spendo_user_name", userName)
+        setPreference("spendo_onboarding_completed", "true")
+        if (monthlyIncomePaise > 0L) {
+            setPreference("spendo_monthly_income_paise", monthlyIncomePaise.toString())
+            setPreference("spendo_income_frequency", incomeFrequency)
+        }
+        if (dailyLimitPaise > 0L) {
+            val currentMonthly = budgetDao.getOverallBudgetByPeriodDirect("MONTHLY")?.limitPaise ?: (dailyLimitPaise * 30L)
+            updateBudgetLimits(dailyPaise = dailyLimitPaise, monthlyPaise = currentMonthly)
+        }
+        for (acc in accounts) {
+            val last4 = acc.last4Digits.trim()
+            val masked = if (last4.isNotBlank()) "•••• $last4" else ""
+            addBankAccount(
+                bankName = acc.bankName,
+                accountType = acc.accountType,
+                initialBalancePaise = acc.initialBalancePaise,
+                maskedNumber = masked,
+                accountNickname = acc.nickname?.ifBlank { null }
+            )
+        }
+        notifyWidgetUpdate()
+    }
+
+    suspend fun updateProfile(
+        userName: String,
+        monthlyIncomePaise: Long,
+        incomeFrequency: String,
+        dailyLimitPaise: Long
+    ) {
+        setPreference("spendo_user_name", userName)
+        setPreference("spendo_monthly_income_paise", monthlyIncomePaise.toString())
+        setPreference("spendo_income_frequency", incomeFrequency)
+        if (dailyLimitPaise > 0L) {
+            val currentMonthly = budgetDao.getOverallBudgetByPeriodDirect("MONTHLY")?.limitPaise ?: (dailyLimitPaise * 30L)
+            updateBudgetLimits(dailyPaise = dailyLimitPaise, monthlyPaise = currentMonthly)
+        }
+        notifyWidgetUpdate()
+    }
+
+
+    // -------------------------------------------------------------
     // Seed Data Helper
     // -------------------------------------------------------------
 
     private suspend fun seedDefaultsIfEmpty() {
+        // 1. Seed essential base categories with clean monochrome styling if none exist
         if (categoryDao.getCategoryCount() == 0) {
             val defaultCategories = listOf(
-                CategoryEntity("cat_food", "Food & Drink", "restaurant", "#B7F34A", "EXPENSE"),
+                CategoryEntity("cat_food", "Food & Drink", "restaurant", "#FFFFFF", "EXPENSE"),
                 CategoryEntity("cat_transit", "Transit", "directions_car", "#FFFFFF", "EXPENSE"),
                 CategoryEntity("cat_groceries", "Groceries", "shopping_cart", "#FFFFFF", "EXPENSE"),
                 CategoryEntity("cat_shopping", "Shopping", "shopping_bag", "#FFFFFF", "EXPENSE"),
                 CategoryEntity("cat_entertainment", "Entertainment", "movie", "#FFFFFF", "EXPENSE"),
                 CategoryEntity("cat_subscriptions", "Subscriptions", "repeat", "#FFFFFF", "EXPENSE"),
-                CategoryEntity("cat_salary", "Salary", "payments", "#B7F34A", "INCOME"),
-                CategoryEntity("cat_freelance", "Freelance", "laptop", "#B7F34A", "INCOME"),
-                CategoryEntity("cat_investments", "Investments", "trending_up", "#B7F34A", "INCOME"),
+                CategoryEntity("cat_salary", "Salary", "payments", "#FFFFFF", "INCOME"),
+                CategoryEntity("cat_freelance", "Freelance", "laptop", "#FFFFFF", "INCOME"),
+                CategoryEntity("cat_investments", "Investments", "trending_up", "#FFFFFF", "INCOME"),
                 CategoryEntity("cat_other", "Other", "category", "#888888", "BOTH")
             )
             categoryDao.insertCategories(defaultCategories)
         }
 
-        if (bankAccountDao.getBankAccountCount() == 0) {
-            val now = System.currentTimeMillis()
-            val defaultBanks = listOf(
-                BankAccountEntity("bank_1", "Indian Bank", "Salary Account", "•••• 4892", 5240000L, 5240000L, true, now, now),
-                BankAccountEntity("bank_2", "Kotak Mahindra Bank", "Smart Savings", "•••• 1920", 2850050L, 2850050L, false, now, now),
-                BankAccountEntity("bank_3", "Karur Vysya Bank", "Branch Account (KVB)", "•••• 7731", 1520000L, 1520000L, false, now, now)
-            )
-            bankAccountDao.insertBankAccounts(defaultBanks)
+        // 2. Safe cleanup of legacy seed dummy transactions (tx_1..tx_10, tx_demo_*, tx_seed_*)
+        val legacySeedTxIds = listOf(
+            "tx_1", "tx_2", "tx_3", "tx_4", "tx_5", "tx_6", "tx_7", "tx_8", "tx_9", "tx_10",
+            "tx_demo_1", "tx_demo_2", "tx_seed_1", "tx_seed_2"
+        )
+        for (dummyTxId in legacySeedTxIds) {
+            transactionDao.deleteTransactionById(dummyTxId)
         }
 
-        if (budgetDao.getOverallBudgetByPeriodDirect("DAILY") == null) {
-            val now = System.currentTimeMillis()
-            budgetDao.insertBudget(BudgetEntity("budget_daily_overall", null, "DAILY", 250000L, now, now))
-            budgetDao.insertBudget(BudgetEntity("budget_monthly_overall", null, "MONTHLY", 6500000L, now, now))
-        }
-
-        if (incomeSourceDao.getIncomeCount() == 0) {
-            val now = System.currentTimeMillis()
-            val defaultIncomes = listOf(
-                IncomeSourceEntity("inc_1", "Primary Tech Salary", 8500000L, true, "Monthly (1st of month)", now + 604800000L, "bank_1", "Salary", now, now),
-                IncomeSourceEntity("inc_2", "Design Advisory Retainer", 2500000L, true, "Bi-weekly", now + 345600000L, "bank_2", "Freelance", now, now),
-                IncomeSourceEntity("inc_3", "Index Fund Dividends", 380000L, false, "Quarterly", now + 4406400000L, "bank_2", "Investments", now, now)
-            )
-            incomeSourceDao.insertIncomeSources(defaultIncomes)
-        }
-
-        if (notificationRecordDao.getNotificationCount() == 0) {
-            val defaultNotifications = SpendoMockRepository.sampleNotifications.map { item ->
-                NotificationRecordEntity(
-                    id = item.id,
-                    packageName = "com.spendwise.android",
-                    appName = "Spendo",
-                    title = item.title,
-                    message = item.message,
-                    category = item.category,
-                    postedAtEpochMs = System.currentTimeMillis() - 3600000L,
-                    status = "DETECTED",
-                    progress = item.progress,
-                    isUnread = item.isUnread
-                )
+        // 3. Safe cleanup of legacy seed demo bank accounts (bank_1, bank_2, bank_3)
+        // Only delete if zero real transactions are attached, preserving genuine user data
+        val seedBankIds = listOf("bank_1", "bank_2", "bank_3")
+        for (seedId in seedBankIds) {
+            val linkedTxCount = transactionDao.getTransactionCountForAccount(seedId)
+            if (linkedTxCount == 0) {
+                bankAccountDao.deleteBankAccountById(seedId)
             }
-            notificationRecordDao.insertNotificationRecords(defaultNotifications)
         }
+
+        // 4. Clean up legacy seed dummy incomes
+        val seedIncomeIds = listOf("inc_1", "inc_2", "inc_3")
+        for (seedInc in seedIncomeIds) {
+            incomeSourceDao.deleteIncomeSourceById(seedInc)
+        }
+
+        // 5. Clean up legacy seed dummy notification records
+        val seedNotifIds = listOf("notif_1", "notif_2", "notif_3", "notif_4", "notif_5")
+        for (seedNotif in seedNotifIds) {
+            notificationRecordDao.deleteNotificationRecordById(seedNotif)
+        }
+
+        // 6. Clean up legacy hardcoded budgets if user has not completed custom onboarding
+        val completedPref = getPreferenceDirect("spendo_onboarding_completed")
+        if (completedPref != "true") {
+            budgetDao.deleteBudgetById("budget_daily_overall")
+            budgetDao.deleteBudgetById("budget_monthly_overall")
+        }
+
         notifyWidgetUpdate()
+    }
+
+    suspend fun hasUserBankAccountsDirect(): Boolean {
+        val allBanks = bankAccountDao.getAllBankAccountsDirect()
+        val userBanks = allBanks.filter { it.id != "bank_1" && it.id != "bank_2" && it.id != "bank_3" }
+        return userBanks.isNotEmpty()
     }
 
     private fun getTodayEpochRange(): Pair<Long, Long> {
@@ -991,6 +1106,8 @@ class SpendoFinancialRepository(
 fun TransactionEntity.toSpendoTransaction(): SpendoTransaction {
     val txType = if (direction == "CREDIT") TransactionType.INCOME else TransactionType.EXPENSE
     val txSource = if (sourceType == "NOTIFICATION") TransactionSource.NOTIFICATION else TransactionSource.MANUAL
+    val meta = com.spendwise.android.domain.banking.TransactionReviewMetadata.parse(note)
+    val effectiveAccountId = bankAccountId ?: meta.matchedAccountId
     return SpendoTransaction(
         id = id,
         merchant = merchant ?: "Unspecified Payee",
@@ -1000,10 +1117,16 @@ fun TransactionEntity.toSpendoTransaction(): SpendoTransaction {
         occurredAtEpochMs = occurredAtEpochMillis,
         bankAccountName = bankAccountName ?: "Primary Bank",
         source = txSource,
-        note = note,
+        note = meta.cleanNote ?: note,
         reviewStatus = reviewStatus,
-        reviewReason = note,
-        bankAccountId = bankAccountId
+        reviewReason = meta.explanation ?: note,
+        bankAccountId = effectiveAccountId,
+        detectedBank = meta.detectedBank,
+        extractedAccountSuffix = meta.extractedSuffix,
+        accountMatchStatus = meta.matchStatus,
+        referenceNumber = meta.referenceNumber,
+        parserConfidence = confidence ?: meta.parserConfidence,
+        accountMatchConfidence = meta.matchConfidence
     )
 }
 

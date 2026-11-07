@@ -20,8 +20,11 @@ interface AiProviderConfigDao {
     @Query("SELECT * FROM ai_provider_configs WHERE providerId = :providerId LIMIT 1")
     suspend fun getConfigDirect(providerId: String): AiProviderConfigEntity?
 
-    @Query("SELECT * FROM ai_provider_configs WHERE isConfigured = 1 LIMIT 1")
+    @Query("SELECT * FROM ai_provider_configs WHERE isConfigured = 1 ORDER BY updatedAtEpochMs DESC LIMIT 1")
     fun getActiveConfig(): Flow<AiProviderConfigEntity?>
+
+    @Query("SELECT * FROM ai_provider_configs WHERE isConfigured = 1 ORDER BY updatedAtEpochMs DESC LIMIT 1")
+    suspend fun getActiveConfigDirect(): AiProviderConfigEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveConfig(config: AiProviderConfigEntity)

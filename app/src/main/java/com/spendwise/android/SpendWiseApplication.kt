@@ -43,9 +43,16 @@ class SpendWiseApplication : Application() {
         com.spendwise.android.notification.NotificationAccessManager(this, notificationSettingsRepository)
     }
 
-    val notificationConsumer: com.spendwise.android.notification.TransactionNotificationConsumer by lazy {
-        com.spendwise.android.notification.NotificationIngestionEngine(database.transactionDao())
+    val notificationEngine: com.spendwise.android.notification.NotificationIngestionEngine by lazy {
+        com.spendwise.android.notification.NotificationIngestionEngine(
+            transactionDao = database.transactionDao(),
+            bankAccountDao = database.bankAccountDao(),
+            context = this
+        )
     }
+
+    val notificationConsumer: com.spendwise.android.notification.TransactionNotificationConsumer
+        get() = notificationEngine
 
     companion object {
         lateinit var instance: SpendWiseApplication

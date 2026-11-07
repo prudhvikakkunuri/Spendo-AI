@@ -7,14 +7,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.spendwise.android.notification.SpendoNotificationHelper
 import com.spendwise.android.notification.SpendoReminderScheduler
 import com.spendwise.android.ui.spendo.SpendoApp
 import com.spendwise.android.ui.spendo.model.SpendoViewModel
+import com.spendwise.android.ui.spendo.screens.SpendoSplashScreen
 import com.spendwise.android.ui.spendo.theme.SpendoTheme
 
 /**
@@ -23,6 +27,7 @@ import com.spendwise.android.ui.spendo.theme.SpendoTheme
 class MainActivity : ComponentActivity() {
 
     private val pendingRouteState = mutableStateOf<String?>(null)
+    private var isColdLaunch = true
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -31,6 +36,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_SpendWise)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -49,12 +55,32 @@ class MainActivity : ComponentActivity() {
             val uiState by viewModel.uiState.collectAsState()
             val pendingRoute by pendingRouteState
 
+            // Only show animated splash on fresh cold launch if not launched via direct quick action
+            val showSplash = rememberSaveable {
+                mutableStateOf(isColdLaunch && pendingRoute.isNullOrBlank())
+            }
+
             SpendoTheme(themeMode = uiState.themeMode) {
-                SpendoApp(
-                    viewModel = viewModel,
-                    initialRoute = pendingRoute,
-                    onRouteConsumed = { pendingRouteState.value = null }
-                )
+                Crossfade(
+                    targetState = showSplash.value,
+                    animationSpec = tween(300),
+                    label = "SpendoSplashTransition"
+                ) { isSplashActive ->
+                    if (isSplashActive) {
+                        SpendoSplashScreen(
+                            onSplashComplete = {
+                                showSplash.value = false
+                                isColdLaunch = false
+                            }
+                        )
+                    } else {
+                        SpendoApp(
+                            viewModel = viewModel,
+                            initialRoute = pendingRoute,
+                            onRouteConsumed = { pendingRouteState.value = null }
+                        )
+                    }
+                }
             }
         }
     }
@@ -71,4 +97,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-

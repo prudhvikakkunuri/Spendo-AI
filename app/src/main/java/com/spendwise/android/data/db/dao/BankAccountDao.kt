@@ -33,6 +33,12 @@ interface BankAccountDao {
     @Query("SELECT * FROM bank_accounts WHERE bankName = :bankName AND maskedAccountNumber = :maskedNumber LIMIT 1")
     suspend fun getBankAccountByNameAndNumberDirect(bankName: String, maskedNumber: String): BankAccountEntity?
 
+    @Query("SELECT * FROM bank_accounts WHERE maskedAccountNumber LIKE '%' || :suffix")
+    suspend fun getBankAccountsBySuffixDirect(suffix: String): List<BankAccountEntity>
+
+    @Query("SELECT * FROM bank_accounts WHERE (bankName = :bankName OR :bankName LIKE '%' || bankName || '%' OR bankName LIKE '%' || :bankName || '%') AND maskedAccountNumber LIKE '%' || :suffix")
+    suspend fun getBankAccountsByNameAndSuffixDirect(bankName: String, suffix: String): List<BankAccountEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBankAccount(account: BankAccountEntity)
 

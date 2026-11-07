@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Geometric S Monogram -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M16,33 L29,33 A5.5,5.5 0 0,0 29,22 L21,22 A5.5,5.5 0 0,1 21,11 L31,11" />
+
+    <!-- Lower-Left Connected White Circular Node -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M16,33 m-3.0,0 a3.0,3.0 0 1,0 6.0,0 a3.0,3.0 0 1,0 -6.0,0" />
+
+    <!-- Upper-Right Spendo Accent Red Ring Node -->
+    <path
+        android:strokeColor="#E60023"
+        android:strokeWidth="1.8"
+        android:pathData="M38,7 m-3.0,0 a3.0,3.0 0 1,0 6.0,0 a3.0,3.0 0 1,0 -6.0,0" />
+
+</vector>

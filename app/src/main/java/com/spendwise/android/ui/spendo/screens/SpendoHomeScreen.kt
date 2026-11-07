@@ -18,9 +18,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.outlined.CallReceived
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.ArrowOutward
-import androidx.compose.material.icons.outlined.CallReceived
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Settings
@@ -32,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,12 +68,17 @@ fun SpendoHomeScreen(
     onNavigateToTransactionDetail: (String) -> Unit,
     onNavigateToActivity: () -> Unit,
     onNavigateToReview: () -> Unit = {},
+    onNavigateToCalendar: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val dailyLimitRupees = uiState.dailyLimitPaise / 100.0
     val todaySpentRupees = uiState.todaySpentPaise / 100.0
     val remainingRupees = (dailyLimitRupees - todaySpentRupees).coerceAtLeast(0.0)
-    val progressFraction = (todaySpentRupees / dailyLimitRupees).coerceIn(0.0, 1.0).toFloat()
+    val progressFraction = if (dailyLimitRupees > 0.0) {
+        (todaySpentRupees / dailyLimitRupees).coerceIn(0.0, 1.0).toFloat()
+    } else {
+        0f
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -102,9 +110,14 @@ fun SpendoHomeScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -116,35 +129,82 @@ fun SpendoHomeScreen(
                                     .background(SpendoColor.AccentRed)
                             )
                             DotMatrixText(
-                                text = "Spendo Agent 1.0",
+                                text = "SPENDO AGENT 1.0",
                                 fontSize = 10.sp,
                                 color = SpendoColor.TextSecondary
                             )
                         }
-                        Text(
-                            text = "Hello, Alex",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = SpendoColor.TextPrimary
-                        )
+
+                        val timeGreeting = remember {
+                            val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                            when (hour) {
+                                in 4..11 -> "Good morning"
+                                in 12..16 -> "Good afternoon"
+                                in 17..22 -> "Good evening"
+                                else -> "Hello"
+                            }
+                        }
+
+                        val trimmedName = uiState.userName.trim()
+                        if (trimmedName.isBlank() || trimmedName.equals("User", ignoreCase = true)) {
+                            Text(
+                                text = "Welcome to Spendo",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = SpendoColor.TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Text(
+                                text = "$timeGreeting, $trimmedName",
+                                fontSize = 22.sp,
+                                lineHeight = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SpendoColor.TextPrimary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
 
+                    // Compact, accessible action icon row (Calendar, Notifications, Settings)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.padding(top = 2.dp)
                     ) {
-                        IconButton(onClick = onNavigateToNotifications) {
+                        IconButton(
+                            onClick = onNavigateToCalendar,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.CalendarMonth,
+                                contentDescription = "Calendar",
+                                tint = SpendoColor.TextPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onNavigateToNotifications,
+                            modifier = Modifier.size(38.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Outlined.Notifications,
                                 contentDescription = "Notifications",
-                                tint = SpendoColor.TextPrimary
+                                tint = SpendoColor.TextPrimary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        IconButton(onClick = onNavigateToSettings) {
+                        IconButton(
+                            onClick = onNavigateToSettings,
+                            modifier = Modifier.size(38.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Outlined.Settings,
                                 contentDescription = "Settings",
-                                tint = SpendoColor.TextPrimary
+                                tint = SpendoColor.TextPrimary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -303,7 +363,7 @@ fun SpendoHomeScreen(
                     )
                     HomeQuickActionButton(
                         title = "Income",
-                        icon = Icons.Outlined.CallReceived,
+                        icon = Icons.AutoMirrored.Outlined.CallReceived,
                         onClick = onNavigateToAddIncome,
                         modifier = Modifier.weight(1f)
                     )
@@ -366,7 +426,7 @@ fun SpendoHomeScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(72.dp))
+                Spacer(modifier = Modifier.height(84.dp))
             }
         }
     }
@@ -410,7 +470,9 @@ private fun HomeQuickActionButton(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = SpendoColor.TextPrimary,
-                maxLines = 1
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -441,17 +503,12 @@ fun HomeTransactionRow(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
-                        .background(
-                            if (transaction.type == TransactionType.INCOME)
-                                SpendoColor.SuccessGreenSubtle
-                            else
-                                SpendoColor.SurfaceVariant
-                        ),
+                        .background(SpendoColor.SurfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = if (transaction.type == TransactionType.INCOME)
-                            Icons.Outlined.CallReceived
+                            Icons.AutoMirrored.Outlined.CallReceived
                         else
                             Icons.Outlined.ArrowOutward,
                         contentDescription = null,
@@ -460,34 +517,48 @@ fun HomeTransactionRow(
                     )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Text(
                         text = transaction.merchant,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = SpendoColor.TextPrimary
+                        color = SpendoColor.TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "${transaction.category} • ${transaction.bankAccountName}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = SpendoColor.TextSecondary
+                        color = SpendoColor.TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            Column(horizontalAlignment = Alignment.End) {
+            Column(
+                modifier = Modifier.padding(start = 8.dp),
+                horizontalAlignment = Alignment.End
+            ) {
                 val sign = if (transaction.type == TransactionType.INCOME) "+" else "−"
                 Text(
                     text = "$sign${transaction.formattedAmount}",
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
-                    color = SpendoColor.TextPrimary
+                    color = SpendoColor.TextPrimary,
+                    maxLines = 1,
+                    softWrap = false
                 )
                 Text(
                     text = transaction.formattedDate,
                     fontSize = 11.sp,
-                    color = SpendoColor.TextMuted
+                    color = SpendoColor.TextMuted,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }

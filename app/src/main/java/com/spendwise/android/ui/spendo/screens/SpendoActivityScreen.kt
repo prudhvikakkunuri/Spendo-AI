@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -60,6 +61,7 @@ fun SpendoActivityScreen(
     onCategoryFilterChange: (String?) -> Unit,
     onNavigateToAddTransaction: () -> Unit,
     onNavigateToTransactionDetail: (String) -> Unit,
+    onNavigateToCalendar: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = SpendoTheme.colors
@@ -162,19 +164,37 @@ fun SpendoActivityScreen(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.surface)
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "${filteredTransactions.size} ENTRIES",
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textSecondary
-                    )
+                    if (onNavigateToCalendar != null) {
+                        IconButton(
+                            onClick = onNavigateToCalendar,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.CalendarMonth,
+                                contentDescription = "Calendar View",
+                                tint = colors.textPrimary
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.surface)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "${filteredTransactions.size} ENTRIES",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textSecondary
+                        )
+                    }
                 }
             }
 
@@ -374,12 +394,6 @@ private fun ActivityFilterPill(
         colors.textSecondary
     }
 
-    val borderColor = if (selected) {
-        if (colors.isDark) colors.accentRed else colors.borderDark
-    } else {
-        colors.borderSubtle
-    }
-
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
@@ -405,7 +419,9 @@ private fun ActivityFilterPill(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = contentColor
+                color = contentColor,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }

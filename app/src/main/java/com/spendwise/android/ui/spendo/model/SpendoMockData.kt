@@ -24,7 +24,13 @@ data class SpendoTransaction(
     val note: String? = null,
     val reviewStatus: String = "CONFIRMED",
     val reviewReason: String? = null,
-    val bankAccountId: String? = null
+    val bankAccountId: String? = null,
+    val detectedBank: String? = null,
+    val extractedAccountSuffix: String? = null,
+    val accountMatchStatus: com.spendwise.android.domain.banking.AccountMatchStatus? = null,
+    val referenceNumber: String? = null,
+    val parserConfidence: Float? = null,
+    val accountMatchConfidence: Float? = null
 ) {
     val amountRupees: Double get() = amountPaise / 100.0
     val formattedAmount: String get() = "₹%,.2f".format(Locale.ENGLISH, amountRupees)
@@ -56,6 +62,9 @@ data class SpendoBank(
     val displayName: String get() = if (!accountNickname.isNullOrBlank()) "$bankName ($accountNickname)" else bankName
     val balanceRupees: Double get() = balancePaise / 100.0
     val formattedBalance: String get() = "₹%,.2f".format(Locale.ENGLISH, balanceRupees)
+    val last4Digits: String get() = maskedAccountNumber.filter { it.isDigit() }.takeLast(4)
+    val displaySuffix: String get() = if (last4Digits.isNotBlank()) "•••• $last4Digits" else "No Suffix"
+    val displayNameWithSuffix: String get() = accountNickname ?: if (last4Digits.isNotBlank()) "$bankName •••• $last4Digits" else bankName
 }
 
 data class SpendoNotificationItem(

@@ -412,6 +412,13 @@ class SpendoProductPolishUnitTest {
     @Test
     fun testManualExpenseEditingUpdatesRecordWithoutDuplication() {
         val viewModel = SpendoViewModel()
+        viewModel.addTransaction(
+            merchant = "Initial Test Merchant",
+            amountPaise = 50000L,
+            type = com.spendwise.android.ui.spendo.model.TransactionType.EXPENSE,
+            category = "Dining",
+            bankAccountName = "Primary Bank"
+        )
         val originalTx = viewModel.uiState.value.transactions.first()
         val originalId = originalTx.id
         val originalSize = viewModel.uiState.value.transactions.size

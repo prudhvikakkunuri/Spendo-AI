@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Savings
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Icon
@@ -48,6 +49,7 @@ import com.spendwise.android.ui.spendo.components.DotMatrixAmount
 import com.spendwise.android.ui.spendo.components.DotMatrixText
 import com.spendwise.android.ui.spendo.components.SpendoCard
 import com.spendwise.android.ui.spendo.components.SpendoDarkCard
+import com.spendwise.android.ui.spendo.components.SpendoEmptyState
 import com.spendwise.android.ui.spendo.components.SpendoTopBar
 import com.spendwise.android.ui.spendo.model.AffordabilityVerdict
 import com.spendwise.android.ui.spendo.model.SpendoUiState
@@ -166,134 +168,150 @@ fun SpendoAnalyticsScreen(
                 }
             }
 
-            // Overview Metric Card (Dynamically computed from selected timeframe)
-            SpendoDarkCard {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        DotGridBadge(
-                            text = "$selectedTimeframe Velocity",
-                            indicatorColor = SpendoColor.SuccessGreen,
-                            containerColor = SpendoColor.DarkCardContainer,
-                            textColor = SpendoColor.CardDarkText
-                        )
-                        DotMatrixText(
-                            text = "DETERMINISTIC DATA",
-                            fontSize = 10.sp,
-                            color = SpendoColor.CardDarkTextSecondary
-                        )
-                    }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        DotMatrixText(text = "Tracked Outflow ($selectedTimeframe)", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
-                        DotMatrixAmount(
-                            amountText = "%,.2f".format(Locale.ENGLISH, timeframeSpentRupees),
-                            fontSize = 32.sp,
-                            color = SpendoColor.CardDarkText
-                        )
+            if (filteredTransactions.isEmpty()) {
+                SpendoCard(contentPadding = 24.dp) {
+                    SpendoEmptyState(
+                        title = "No spending data yet",
+                        message = "Your spending insights will appear here as you record expenses.",
+                        icon = Icons.Outlined.Insights
+                    )
+                }
+            } else {
+                // Overview Metric Card (Dynamically computed from selected timeframe)
+                SpendoDarkCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            DotGridBadge(
+                                text = "$selectedTimeframe Velocity",
+                                indicatorColor = SpendoColor.SuccessGreen,
+                                containerColor = SpendoColor.DarkCardContainer,
+                                textColor = SpendoColor.CardDarkText
+                            )
                             DotMatrixText(
-                                text = "${expenseTransactions.size} verified debit transactions",
+                                text = "DETERMINISTIC DATA",
                                 fontSize = 10.sp,
                                 color = SpendoColor.CardDarkTextSecondary
                             )
-                            if (totalIncomePaise > 0L) {
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            DotMatrixText(text = "Tracked Outflow ($selectedTimeframe)", fontSize = 11.sp, color = SpendoColor.CardDarkTextSecondary)
+                            DotMatrixAmount(
+                                amountText = "%,.2f".format(Locale.ENGLISH, timeframeSpentRupees),
+                                fontSize = 32.sp,
+                                color = SpendoColor.CardDarkText
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
                                 DotMatrixText(
-                                    text = "Inflow: ₹%,.0f".format(Locale.ENGLISH, timeframeIncomeRupees),
+                                    text = "${expenseTransactions.size} verified debit transactions",
                                     fontSize = 10.sp,
-                                    color = SpendoColor.SuccessGreen
+                                    color = SpendoColor.CardDarkTextSecondary
                                 )
+                                if (totalIncomePaise > 0L) {
+                                    DotMatrixText(
+                                        text = "Inflow: ₹%,.0f".format(Locale.ENGLISH, timeframeIncomeRupees),
+                                        fontSize = 10.sp,
+                                        color = SpendoColor.SuccessGreen
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Highest Spending Merchant Highlight
-            topMerchantEntry?.let { (merchant, amountPaise) ->
-                SpendoCard(contentPadding = 16.dp) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            DotMatrixText(text = "Top Expense Destination", fontSize = 10.sp, color = SpendoColor.TextSecondary)
-                            val merchantAmountStr = "₹%,.2f".format(Locale.ENGLISH, amountPaise / 100.0)
-                            Text(
-                                text = "$merchant ($merchantAmountStr)",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = SpendoColor.TextPrimary
+                // Highest Spending Merchant Highlight
+                topMerchantEntry?.let { (merchant, amountPaise) ->
+                    SpendoCard(contentPadding = 16.dp) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                DotMatrixText(text = "Top Expense Destination", fontSize = 10.sp, color = SpendoColor.TextSecondary)
+                                val merchantAmountStr = "₹%,.2f".format(Locale.ENGLISH, amountPaise / 100.0)
+                                Text(
+                                    text = "$merchant ($merchantAmountStr)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SpendoColor.TextPrimary
+                                )
+                                val pct = if (totalExpensePaise > 0) (amountPaise.toDouble() / totalExpensePaise) * 100 else 0.0
+                                val pctStr = String.format(Locale.ENGLISH, "%.1f", pct)
+                                Text(
+                                    text = "Accounts for $pctStr% of tracked expenses in this period.",
+                                    fontSize = 12.sp,
+                                    color = SpendoColor.TextSecondary
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(SpendoColor.AccentRed)
                             )
-                            val pct = if (totalExpensePaise > 0) (amountPaise.toDouble() / totalExpensePaise) * 100 else 0.0
-                            val pctStr = String.format(Locale.ENGLISH, "%.1f", pct)
+                        }
+                    }
+                }
+
+                // Dynamic Category Breakdown
+                SpendoCard(contentPadding = 18.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        DotMatrixText(text = "Category Distribution ($selectedTimeframe)", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+
+                        if (categoryTotals.isEmpty()) {
                             Text(
-                                text = "Accounts for $pctStr% of tracked expenses in this period.",
+                                text = "No category expense data recorded for this $selectedTimeframe period.",
                                 fontSize = 12.sp,
                                 color = SpendoColor.TextSecondary
                             )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(SpendoColor.AccentRed)
-                        )
-                    }
-                }
-            }
-
-            // Dynamic Category Breakdown
-            SpendoCard(contentPadding = 18.dp) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    DotMatrixText(text = "Category Distribution ($selectedTimeframe)", fontSize = 11.sp, color = SpendoColor.TextSecondary)
-
-                    if (categoryTotals.isEmpty()) {
-                        Text(
-                            text = "No category expense data recorded for this $selectedTimeframe period.",
-                            fontSize = 12.sp,
-                            color = SpendoColor.TextSecondary
-                        )
-                    } else {
-                        categoryTotals.take(6).forEach { (cat, amountPaise) ->
-                            val pct = if (totalExpensePaise > 0) ((amountPaise.toDouble() / totalExpensePaise) * 100).toInt() else 0
-                            val formattedPaise = "₹%,.2f".format(Locale.ENGLISH, amountPaise / 100.0)
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = cat,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = SpendoColor.TextPrimary
-                                    )
-                                    Text(
-                                        text = "$formattedPaise ($pct%)",
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SpendoColor.TextSecondary
+                        } else {
+                            categoryTotals.take(6).forEach { (cat, amountPaise) ->
+                                val pct = if (totalExpensePaise > 0) ((amountPaise.toDouble() / totalExpensePaise) * 100).toInt() else 0
+                                val formattedPaise = "₹%,.2f".format(Locale.ENGLISH, amountPaise / 100.0)
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = cat,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = SpendoColor.TextPrimary,
+                                            modifier = Modifier.weight(1f),
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "$formattedPaise ($pct%)",
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = SpendoColor.TextSecondary,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                    LinearProgressIndicator(
+                                        progress = { (pct / 100f).coerceIn(0f, 1f) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(3.dp)
+                                            .clip(RoundedCornerShape(1.5.dp)),
+                                        color = SpendoColor.SurfaceDark,
+                                        trackColor = SpendoColor.SurfaceVariant
                                     )
                                 }
-                                LinearProgressIndicator(
-                                    progress = { (pct / 100f).coerceIn(0f, 1f) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.dp)
-                                        .clip(RoundedCornerShape(1.5.dp)),
-                                    color = SpendoColor.SurfaceDark,
-                                    trackColor = SpendoColor.SurfaceVariant
-                                )
                             }
                         }
                     }
@@ -317,61 +335,69 @@ fun SpendoAnalyticsScreen(
                         )
                     }
 
-                    uiState.savingsGoals.forEach { goal ->
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(SpendoColor.SurfaceVariant.copy(alpha = 0.5f))
-                                .padding(12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = goal.title,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = SpendoColor.TextPrimary
-                                )
-                                Text(
-                                    text = goal.percentageText,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp,
-                                    color = SpendoColor.SuccessGreen
-                                )
-                            }
-
-                            LinearProgressIndicator(
-                                progress = { goal.progress },
+                    if (uiState.savingsGoals.isEmpty()) {
+                        Text(
+                            text = "No active savings goals configured. Add goals to track your target reserves.",
+                            fontSize = 12.sp,
+                            color = SpendoColor.TextSecondary
+                        )
+                    } else {
+                        uiState.savingsGoals.forEach { goal ->
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp)),
-                                color = SpendoColor.SuccessGreen,
-                                trackColor = SpendoColor.DarkTrack
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(SpendoColor.SurfaceVariant.copy(alpha = 0.5f))
+                                    .padding(12.dp)
                             ) {
-                                Text(
-                                    text = "Saved: ₹%,.0f / ₹%,.0f".format(Locale.ENGLISH, goal.savedPaise / 100.0, goal.targetPaise / 100.0),
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = SpendoColor.TextSecondary
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = goal.title,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = SpendoColor.TextPrimary
+                                    )
+                                    Text(
+                                        text = goal.percentageText,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = SpendoColor.SuccessGreen
+                                    )
+                                }
+
+                                LinearProgressIndicator(
+                                    progress = { goal.progress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = SpendoColor.SuccessGreen,
+                                    trackColor = SpendoColor.DarkTrack
                                 )
-                                Text(
-                                    text = "Target: ${goal.targetDateText}",
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = SpendoColor.TextMuted
-                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Saved: ₹%,.0f / ₹%,.0f".format(Locale.ENGLISH, goal.savedPaise / 100.0, goal.targetPaise / 100.0),
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = SpendoColor.TextSecondary
+                                    )
+                                    Text(
+                                        text = "Target: ${goal.targetDateText}",
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = SpendoColor.TextMuted
+                                    )
+                                }
                             }
                         }
                     }
@@ -429,7 +455,9 @@ fun SpendoAnalyticsScreen(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
-                                color = SpendoColor.Background
+                                color = SpendoColor.Background,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -437,7 +465,7 @@ fun SpendoAnalyticsScreen(
                     // Result Display
                     uiState.affordabilityResult?.let { eval ->
                         val (verdictColor, verdictIcon) = when (eval.verdict) {
-                            AffordabilityVerdict.AFFORDABLE -> SpendoColor.SuccessGreen to Icons.Outlined.CheckCircle
+                            AffordabilityVerdict.AFFORDABLE -> SpendoColor.TextPrimary to Icons.Outlined.CheckCircle
                             AffordabilityVerdict.CAUTION -> SpendoColor.AccentRed.copy(alpha = 0.8f) to Icons.Outlined.Info
                             AffordabilityVerdict.RISKY -> SpendoColor.AccentRed to Icons.Outlined.Warning
                         }
@@ -509,7 +537,7 @@ fun SpendoAnalyticsScreen(
                                         text = "Free Buffer: ₹%,.0f".format(Locale.ENGLISH, eval.freeDiscretionaryPaise / 100.0),
                                         fontSize = 10.sp,
                                         fontFamily = FontFamily.Monospace,
-                                        color = SpendoColor.SuccessGreen
+                                        color = SpendoColor.TextPrimary
                                     )
                                 }
                             }
@@ -518,7 +546,7 @@ fun SpendoAnalyticsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(84.dp))
         }
     }
 }

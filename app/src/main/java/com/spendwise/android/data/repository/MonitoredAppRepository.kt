@@ -97,11 +97,8 @@ class MonitoredAppRepository(
     }
 
     private suspend fun seedDefaultAppsIfEmpty() = withContext(Dispatchers.IO) {
-        val count = monitoredAppDao.getCount()
-        if (count == 0) {
-            monitoredAppDao.insertDefaultApps(DEFAULT_KNOWN_FINANCIAL_APPS)
-            refreshEnabledPackagesCache()
-        }
+        monitoredAppDao.insertDefaultApps(DEFAULT_KNOWN_FINANCIAL_APPS)
+        refreshEnabledPackagesCache()
     }
 
     companion object {
@@ -131,6 +128,21 @@ class MonitoredAppRepository(
                 isEnabled = true
             ),
             MonitoredAppEntity(
+                packageName = "com.google.android.apps.messaging",
+                appName = "Messages by Google (SMS)",
+                isEnabled = true
+            ),
+            MonitoredAppEntity(
+                packageName = "com.samsung.android.messaging",
+                appName = "Samsung Messages (SMS)",
+                isEnabled = true
+            ),
+            MonitoredAppEntity(
+                packageName = "com.android.mms",
+                appName = "System Messages (SMS)",
+                isEnabled = true
+            ),
+            MonitoredAppEntity(
                 packageName = "com.hdfcbank.android",
                 appName = "HDFC Bank MobileBanking",
                 isEnabled = true
@@ -153,6 +165,26 @@ class MonitoredAppRepository(
             MonitoredAppEntity(
                 packageName = "in.org.npci.upiapp",
                 appName = "BHIM UPI",
+                isEnabled = true
+            ),
+            MonitoredAppEntity(
+                packageName = "com.kvb.dlite",
+                appName = "Karur Vysya Bank (KVB DLite)",
+                isEnabled = true
+            ),
+            MonitoredAppEntity(
+                packageName = "com.kvb.mobilebanking",
+                appName = "Karur Vysya Bank (KVB Mobile)",
+                isEnabled = true
+            ),
+            MonitoredAppEntity(
+                packageName = "com.msf.kbank.mobile",
+                appName = "Kotak Mahindra Bank",
+                isEnabled = true
+            ),
+            MonitoredAppEntity(
+                packageName = "com.infrasofttech.IndianBank",
+                appName = "Indian Bank IndOASIS",
                 isEnabled = true
             )
         )

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.spendwise.android.ui.spendo.components.DotMatrixText
 import com.spendwise.android.ui.spendo.components.SpendoCard
 import com.spendwise.android.ui.spendo.components.SpendoEmptyState
+import com.spendwise.android.ui.spendo.model.SpendoBank
 import com.spendwise.android.ui.spendo.model.SpendoTransaction
 import com.spendwise.android.ui.spendo.model.SpendoUiState
 import com.spendwise.android.ui.spendo.theme.SpendoTheme
@@ -57,11 +59,13 @@ fun SpendoReviewScreen(
     onNavigateBack: () -> Unit,
     onApprove: (String) -> Unit,
     onReject: (String) -> Unit,
-    onUpdateAndApprove: (id: String, merchant: String, amountPaise: Long, category: String, bankAccountName: String, rememberPref: Boolean) -> Unit,
+    onUpdateAndApprove: (id: String, merchant: String, amountPaise: Long, category: String, bankAccountName: String, bankAccountId: String?, rememberPref: Boolean) -> Unit,
+    onNavigateToBankAccounts: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = SpendoTheme.colors
     val pendingTransactions = uiState.pendingReviewTransactions
+    val banks = uiState.banks
 
     Column(
         modifier = modifier
@@ -145,7 +149,7 @@ fun SpendoReviewScreen(
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = "Spendo flags ambiguous amounts, suspected transfers, and unconfirmed merchants so your tracked balance remains 100% reliable.",
+                    text = "Review-first protection: Spendo holds detected alerts in this queue until verified. Confirmed ledger and bank balances update only upon explicit approval.",
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                     color = colors.textSecondary
@@ -164,7 +168,7 @@ fun SpendoReviewScreen(
             ) {
                 SpendoEmptyState(
                     title = "All Clear",
-                    message = "No uncertain notifications or ambiguous transactions awaiting review. Your tracked ledger is fully synchronized."
+                    message = "No unverified notifications or pending transactions awaiting review. Your confirmed ledger is 100% clean."
                 )
             }
         } else {
@@ -177,11 +181,13 @@ fun SpendoReviewScreen(
                 items(pendingTransactions, key = { it.id }) { tx ->
                     ReviewTransactionItem(
                         transaction = tx,
+                        banks = banks,
                         onApprove = { onApprove(tx.id) },
                         onReject = { onReject(tx.id) },
-                        onUpdateAndApprove = { merchant, amountPaise, category, bank, rememberPref ->
-                            onUpdateAndApprove(tx.id, merchant, amountPaise, category, bank, rememberPref)
-                        }
+                        onUpdateAndApprove = { merchant, amountPaise, category, bank, bankId, rememberPref ->
+                            onUpdateAndApprove(tx.id, merchant, amountPaise, category, bank, bankId, rememberPref)
+                        },
+                        onNavigateToBankAccounts = onNavigateToBankAccounts
                     )
                 }
 
@@ -196,15 +202,25 @@ fun SpendoReviewScreen(
 @Composable
 private fun ReviewTransactionItem(
     transaction: SpendoTransaction,
+    banks: List<SpendoBank>,
     onApprove: () -> Unit,
     onReject: () -> Unit,
-    onUpdateAndApprove: (merchant: String, amountPaise: Long, category: String, bank: String, rememberPref: Boolean) -> Unit
+    onUpdateAndApprove: (merchant: String, amountPaise: Long, category: String, bank: String, bankId: String?, rememberPref: Boolean) -> Unit,
+    onNavigateToBankAccounts: () -> Unit
 ) {
     val colors = SpendoTheme.colors
     var isExpanded by remember { mutableStateOf(false) }
     var editedMerchant by remember { mutableStateOf(transaction.merchant) }
     var editedCategory by remember { mutableStateOf(transaction.category) }
+    var selectedBankId by remember { mutableStateOf(transaction.bankAccountId) }
+    var selectedBankName by remember { mutableStateOf(transaction.bankAccountName) }
+    var editedAmountPaise by remember { mutableStateOf(transaction.amountPaise) }
+    var editedAmountStr by remember { mutableStateOf((transaction.amountPaise / 100.0).toString()) }
     var rememberPref by remember { mutableStateOf(true) }
+
+    val hasLinkedAccount = !selectedBankId.isNullOrBlank()
+    val isUnrecognizedSuffix = transaction.accountMatchStatus == com.spendwise.android.domain.banking.AccountMatchStatus.UNKNOWN_SUFFIX_UNLINKED ||
+        (!transaction.extractedAccountSuffix.isNullOrBlank() && !hasLinkedAccount && banks.none { it.last4Digits == transaction.extractedAccountSuffix })
 
     SpendoCard(
         modifier = Modifier.fillMaxWidth()
@@ -227,7 +243,7 @@ private fun ReviewTransactionItem(
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = transaction.reviewReason ?: "UNCERTAIN TRANSACTION",
+                        text = transaction.reviewReason ?: "PENDING VERIFICATION",
                         fontFamily = FontFamily.Monospace,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -257,9 +273,13 @@ private fun ReviewTransactionItem(
                         color = colors.textPrimary
                     )
                     Text(
-                        text = "${transaction.category} • ${transaction.bankAccountName}",
+                        text = if (hasLinkedAccount) {
+                            "${transaction.category} • $selectedBankName"
+                        } else {
+                            "${transaction.category} • Unresolved Account"
+                        },
                         fontSize = 12.sp,
-                        color = colors.textSecondary
+                        color = if (hasLinkedAccount) colors.textSecondary else colors.accentRed
                     )
                 }
 
@@ -268,6 +288,120 @@ private fun ReviewTransactionItem(
                     fontSize = 20.sp,
                     color = colors.textPrimary
                 )
+            }
+
+            // If account is unlinked, ambiguous, or unrecognized
+            if (!hasLinkedAccount) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.accentRed.copy(alpha = 0.08f))
+                        .border(1.dp, colors.accentRed.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (isUnrecognizedSuffix && !transaction.extractedAccountSuffix.isNullOrBlank()) {
+                            Text(
+                                text = "⚠️ Unrecognized bank account •••• ${transaction.extractedAccountSuffix}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.accentRed
+                            )
+                            Text(
+                                text = "This account is not registered in Spendo. Link it to an existing account below, or add a new account.",
+                                fontSize = 11.sp,
+                                color = colors.textSecondary,
+                                lineHeight = 15.sp
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Link to existing account:",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(colors.surface)
+                                        .border(1.dp, colors.textPrimary, RoundedCornerShape(6.dp))
+                                        .clickable { onNavigateToBankAccounts() }
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = "+ Add Bank Account",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "⚠️ Select the correct bank account",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.accentRed
+                            )
+                            if (!transaction.reviewReason.isNullOrBlank()) {
+                                Text(
+                                    text = transaction.reviewReason,
+                                    fontSize = 11.sp,
+                                    color = colors.textSecondary,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+
+                        if (banks.isNotEmpty()) {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(banks) { bank ->
+                                    val isSelected = bank.id == selectedBankId
+                                    val label = bank.displayNameWithSuffix
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (isSelected) colors.textPrimary else colors.surface)
+                                            .border(1.dp, if (isSelected) colors.textPrimary else colors.divider, RoundedCornerShape(6.dp))
+                                            .clickable {
+                                                selectedBankId = bank.id
+                                                selectedBankName = label
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) colors.background else colors.textPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(colors.surface)
+                                    .border(1.dp, colors.textPrimary, RoundedCornerShape(6.dp))
+                                    .clickable { onNavigateToBankAccounts() }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = "+ Add Bank Account to Link",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             if (!isExpanded) {
@@ -282,17 +416,36 @@ private fun ReviewTransactionItem(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(colors.surfaceDark)
-                            .clickable { onApprove() }
+                            .background(if (hasLinkedAccount) colors.surfaceDark else colors.surface)
+                            .border(1.dp, if (hasLinkedAccount) colors.surfaceDark else colors.divider, RoundedCornerShape(8.dp))
+                            .clickable {
+                                if (hasLinkedAccount) {
+                                    if (selectedBankId != transaction.bankAccountId || selectedBankName != transaction.bankAccountName) {
+                                        onUpdateAndApprove(
+                                            editedMerchant.trim(),
+                                            editedAmountPaise,
+                                            editedCategory.trim(),
+                                            selectedBankName,
+                                            selectedBankId,
+                                            rememberPref
+                                        )
+                                    } else {
+                                        onApprove()
+                                    }
+                                } else {
+                                    // Expand to prompt account selection
+                                    isExpanded = true
+                                }
+                            }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "✓ Approve",
+                            text = if (hasLinkedAccount) "✓ Approve" else "Select Account",
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = if (colors.isDark) colors.textPrimary else colors.textInverse
+                            color = if (hasLinkedAccount) (if (colors.isDark) colors.textPrimary else colors.textInverse) else colors.accentRed
                         )
                     }
 
@@ -337,7 +490,27 @@ private fun ReviewTransactionItem(
                     OutlinedTextField(
                         value = editedMerchant,
                         onValueChange = { editedMerchant = it },
-                        label = { Text("Merchant Name", fontSize = 11.sp) },
+                        label = { Text("Merchant / Payee", fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = colors.background,
+                            unfocusedContainerColor = colors.background,
+                            focusedIndicatorColor = colors.textPrimary,
+                            unfocusedIndicatorColor = colors.divider
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = editedAmountStr,
+                        onValueChange = {
+                            editedAmountStr = it
+                            val parsed = it.toDoubleOrNull()
+                            if (parsed != null && parsed > 0.0) {
+                                editedAmountPaise = (parsed * 100).toLong()
+                            }
+                        },
+                        label = { Text("Amount (₹)", fontSize = 11.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         colors = TextFieldDefaults.colors(
@@ -361,6 +534,41 @@ private fun ReviewTransactionItem(
                             unfocusedIndicatorColor = colors.divider
                         )
                     )
+
+                    // Bank Account Selector in Edit Mode
+                    if (banks.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "Associated Bank Account",
+                                fontSize = 11.sp,
+                                color = colors.textSecondary
+                            )
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(banks) { bank ->
+                                    val isSelected = bank.id == selectedBankId
+                                    val label = bank.displayNameWithSuffix
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (isSelected) colors.textPrimary else colors.surface)
+                                            .border(1.dp, if (isSelected) colors.textPrimary else colors.divider, RoundedCornerShape(6.dp))
+                                            .clickable {
+                                                selectedBankId = bank.id
+                                                selectedBankName = label
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) colors.background else colors.textPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -391,25 +599,29 @@ private fun ReviewTransactionItem(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(colors.surfaceDark)
+                                .background(if (hasLinkedAccount) colors.surfaceDark else colors.surface)
+                                .border(1.dp, if (hasLinkedAccount) colors.surfaceDark else colors.divider, RoundedCornerShape(8.dp))
                                 .clickable {
-                                    onUpdateAndApprove(
-                                        editedMerchant.trim(),
-                                        transaction.amountPaise,
-                                        editedCategory.trim(),
-                                        transaction.bankAccountName,
-                                        rememberPref
-                                    )
+                                    if (hasLinkedAccount) {
+                                        onUpdateAndApprove(
+                                            editedMerchant.trim(),
+                                            editedAmountPaise,
+                                            editedCategory.trim(),
+                                            selectedBankName,
+                                            selectedBankId,
+                                            rememberPref
+                                        )
+                                    }
                                 }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Save & Approve",
+                                text = if (hasLinkedAccount) "Save & Approve" else "Select Account First",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
-                                color = if (colors.isDark) colors.textPrimary else colors.textInverse
+                                color = if (hasLinkedAccount) (if (colors.isDark) colors.textPrimary else colors.textInverse) else colors.accentRed
                             )
                         }
 

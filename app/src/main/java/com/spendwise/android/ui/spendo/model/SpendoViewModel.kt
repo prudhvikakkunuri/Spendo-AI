@@ -24,43 +24,49 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+data class SpendoMonitoredAppItem(
+    val packageName: String,
+    val appName: String,
+    val isEnabled: Boolean
+)
+
 data class SpendoUiState(
     // Theme & Appearance
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
 
-    // Transactions & Activity
-    val transactions: List<SpendoTransaction> = SpendoMockRepository.sampleTransactions,
+    // Transactions & Activity (Real data only, no fake mock items)
+    val transactions: List<SpendoTransaction> = emptyList(),
     val searchQuery: String = "",
     val selectedFilterType: TransactionType? = null,
     val selectedCategory: String? = null,
 
-    // Budget Limits (strictly Long paise)
-    val dailyLimitPaise: Long = 250000L,       // ₹2,500.00
-    val todaySpentPaise: Long = 142000L,       // ₹1,420.00
-    val monthlyLimitPaise: Long = 6500000L,    // ₹65,000.00
-    val monthSpentPaise: Long = 2840000L,      // ₹28,400.00
-    val currentStreakDays: Int = 5,
+    // Budget Limits (strictly Long paise, 0L default when unconfigured)
+    val dailyLimitPaise: Long = 0L,
+    val todaySpentPaise: Long = 0L,
+    val monthlyLimitPaise: Long = 0L,
+    val monthSpentPaise: Long = 0L,
+    val currentStreakDays: Int = 0,
 
     // Banks & Privacy
-    val banks: List<SpendoBank> = SpendoMockRepository.sampleBanks,
+    val banks: List<SpendoBank> = emptyList(),
     val isBalancesRevealed: Boolean = false,
     val showUnlockDialog: Boolean = false,
 
     // Calendar
-    val selectedCalendarDay: Int = 24, // 24th October
+    val selectedCalendarDay: Int = 24,
     val currentMonthName: String = "October 2026",
 
     // Notifications
-    val notifications: List<SpendoNotificationItem> = SpendoMockRepository.sampleNotifications,
+    val notifications: List<SpendoNotificationItem> = emptyList(),
     val selectedNotificationCategory: String = "All",
 
     // Incomes
-    val incomes: List<SpendoIncomeItem> = SpendoMockRepository.sampleIncomes,
+    val incomes: List<SpendoIncomeItem> = emptyList(),
 
     // AI Chat & Config
-    val chatMessages: List<SpendoChatMessage> = SpendoMockRepository.initialChatMessages,
+    val chatMessages: List<SpendoChatMessage> = emptyList(),
     val chatInputText: String = "",
-    val aiConfig: AiConfigState = AiConfigState(isConfigured = false), // Default unconfigured as requested
+    val aiConfig: AiConfigState = AiConfigState(isConfigured = false),
 
     // Security & App Lock
     val isBiometricEnabled: Boolean = true,
@@ -71,31 +77,34 @@ data class SpendoUiState(
 
     // Notification Detection Settings
     val isNotificationDetectionEnabled: Boolean = true,
+    val isNotificationAccessGranted: Boolean = false,
     val isManualReviewPreferred: Boolean = true,
-    val monitoredApps: List<Pair<String, Boolean>> = listOf(
-        "Google Pay" to true,
-        "PhonePe" to true,
-        "Paytm" to true,
-        "HDFC Bank MobileBanking" to true,
-        "iMobile Pay (ICICI)" to true,
-        "CRED" to true,
-        "Axis Mobile" to false,
-        "SBI Yono" to false
-    ),
+    val monitoredApps: List<SpendoMonitoredAppItem> = emptyList(),
+    val ingestionStats: com.spendwise.android.notification.IngestionStats = com.spendwise.android.notification.IngestionStats(),
+    val testParseResult: com.spendwise.android.notification.IngestionTestResult? = null,
+    val notificationTone: com.spendwise.android.notification.NotificationPersonalityTone = com.spendwise.android.notification.NotificationPersonalityTone.WITTY,
 
     // Review & Uncertain Transactions
     val pendingReviewTransactions: List<SpendoTransaction> = emptyList(),
     val pendingReviewCount: Int = 0,
 
     // Savings Goals
-    val savingsGoals: List<SpendoSavingsGoal> = SpendoMockRepository.sampleSavingsGoals,
+    val savingsGoals: List<SpendoSavingsGoal> = emptyList(),
 
     // Affordability Evaluation
-    val affordabilityResult: AffordabilityEvaluation? = null
+    val affordabilityResult: AffordabilityEvaluation? = null,
+
+    // User Profile & Onboarding State
+    val isProfileLoaded: Boolean = false,
+    val isOnboardingCompleted: Boolean = false,
+    val userName: String = "",
+    val monthlyIncomePaise: Long = 0L,
+    val incomeFrequency: String = "Monthly"
 )
 
 class SpendoViewModel(
-    private val repository: SpendoFinancialRepository? = null
+    private val repository: SpendoFinancialRepository? = null,
+    private val app: SpendWiseApplication? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SpendoUiState())
@@ -104,7 +113,8 @@ class SpendoViewModel(
     // Android ViewModel constructor utilized by Compose viewModel()
     constructor(application: Application) : this(
         (application as? SpendWiseApplication)?.spendoFinancialRepository
-            ?: SpendoFinancialRepository(AppDatabase.getInstance(application))
+            ?: SpendoFinancialRepository(AppDatabase.getInstance(application)),
+        application as? SpendWiseApplication
     )
 
     init {
@@ -123,7 +133,50 @@ class SpendoViewModel(
     }
 
     private fun initObservables() {
-        val repo = repository ?: return
+        // Observe notification detection paused preference
+        app?.notificationSettingsRepository?.let { settingsRepo ->
+            viewModelScope.launch {
+                settingsRepo.isDetectionPaused.collectLatest { isPaused ->
+                    _uiState.update { it.copy(isNotificationDetectionEnabled = !isPaused) }
+                }
+            }
+        }
+
+        // Observe monitored apps allowlist from database
+        app?.monitoredAppRepository?.let { monitoredRepo ->
+            viewModelScope.launch {
+                monitoredRepo.allMonitoredAppsFlow.collectLatest { apps ->
+                    _uiState.update { state ->
+                        state.copy(
+                            monitoredApps = apps.map { entity ->
+                                SpendoMonitoredAppItem(
+                                    packageName = entity.packageName,
+                                    appName = entity.appName,
+                                    isEnabled = entity.isEnabled
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Observe live notification ingestion statistics
+        app?.notificationEngine?.let { engine ->
+            viewModelScope.launch {
+                engine.statsFlow.collectLatest { stats ->
+                    _uiState.update { it.copy(ingestionStats = stats) }
+                }
+            }
+        }
+
+        // Check initial notification access permission
+        refreshNotificationAccess()
+
+        val repo = repository ?: run {
+            _uiState.update { it.copy(isProfileLoaded = true, isOnboardingCompleted = true) }
+            return
+        }
 
         // Check if custom password has been established
         viewModelScope.launch {
@@ -131,20 +184,73 @@ class SpendoViewModel(
             _uiState.update { it.copy(hasCustomPassword = hasCustom) }
         }
 
+        // Dynamically observe User Name updates (e.g. from Onboarding or Settings)
+        viewModelScope.launch {
+            repo.getPreference("spendo_user_name").collectLatest { savedName ->
+                val trimmed = savedName?.trim()
+                if (!trimmed.isNullOrBlank()) {
+                    _uiState.update { it.copy(userName = trimmed) }
+                }
+            }
+        }
+
+        // Check and restore Onboarding state & User Profile
+        viewModelScope.launch {
+            val completedPref = repo.getPreferenceDirect("spendo_onboarding_completed")
+            val savedName = repo.getPreferenceDirect("spendo_user_name")?.trim()?.takeIf { it.isNotBlank() }
+            if (completedPref == "true") {
+                val incomePaise = repo.getPreferenceDirect("spendo_monthly_income_paise")?.toLongOrNull() ?: 0L
+                val incomeFreq = repo.getPreferenceDirect("spendo_income_frequency") ?: "Monthly"
+                _uiState.update {
+                    it.copy(
+                        isProfileLoaded = true,
+                        isOnboardingCompleted = true,
+                        userName = savedName ?: it.userName,
+                        monthlyIncomePaise = incomePaise,
+                        incomeFrequency = incomeFreq
+                    )
+                }
+            } else {
+                val hasTx = repo.hasTransactionsDirect()
+                val hasBanks = repo.hasUserBankAccountsDirect()
+                val hasSavedProfile = !savedName.isNullOrBlank()
+                if (hasTx || hasBanks || hasSavedProfile) {
+                    // Safe auto-migration for existing users with saved data or profile
+                    repo.setPreference("spendo_onboarding_completed", "true")
+                    _uiState.update {
+                        it.copy(
+                            isProfileLoaded = true,
+                            isOnboardingCompleted = true,
+                            userName = savedName ?: it.userName
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isProfileLoaded = true,
+                            isOnboardingCompleted = false,
+                            userName = savedName ?: it.userName
+                        )
+                    }
+                }
+            }
+        }
+
         // Restore persisted AI configuration on startup
         viewModelScope.launch {
             repo.activeAiConfig.collectLatest { config ->
-                if (config != null && config.isConfigured) {
+                if (config != null) {
                     val apiKey = repo.loadSecureAiApiKey(config.providerId) ?: ""
                     val provider = try {
                         AiProvider.valueOf(config.providerId)
                     } catch (_: Exception) {
                         AiProvider.GROQ
                     }
+                    val isConfigured = config.isConfigured && apiKey.isNotBlank()
                     _uiState.update {
                         it.copy(
                             aiConfig = it.aiConfig.copy(
-                                isConfigured = true,
+                                isConfigured = isConfigured,
                                 provider = provider,
                                 model = config.selectedModel.ifBlank { provider.defaultModel },
                                 apiKey = apiKey,
@@ -156,17 +262,32 @@ class SpendoViewModel(
             }
         }
 
-        // Observe transactions & apply reactive filters
+        // Observe confirmed transactions only (pending and rejected transactions are isolated from confirmed ledger)
         viewModelScope.launch {
-            repo.allTransactions.collectLatest { txList ->
+            repo.confirmedTransactions.collectLatest { txList ->
                 _uiState.update { state ->
-                    // If database has records, replace in-memory default list
-                    if (txList.isNotEmpty()) {
-                        state.copy(transactions = txList)
-                    } else {
-                        state
-                    }
+                    val expenseDates = txList.filter { it.type == TransactionType.EXPENSE }.map { it.occurredAtEpochMs }
+                    val streak = com.spendwise.android.domain.calculator.StreakCalculator.calculateLoggingStreak(
+                        expenseDatesEpochMs = expenseDates,
+                        nowEpochMs = System.currentTimeMillis()
+                    )
+                    state.copy(
+                        transactions = txList,
+                        currentStreakDays = streak
+                    )
                 }
+            }
+        }
+
+        // Observe notification personality tone preference
+        viewModelScope.launch {
+            repo.getPreference("spendo_notification_tone").collectLatest { toneStr ->
+                val tone = try {
+                    com.spendwise.android.notification.NotificationPersonalityTone.valueOf(toneStr ?: "WITTY")
+                } catch (_: Exception) {
+                    com.spendwise.android.notification.NotificationPersonalityTone.WITTY
+                }
+                _uiState.update { it.copy(notificationTone = tone) }
             }
         }
 
@@ -187,45 +308,35 @@ class SpendoViewModel(
         // Observe daily budget
         viewModelScope.launch {
             repo.dailyBudget.collectLatest { budget ->
-                budget?.let { b ->
-                    _uiState.update { it.copy(dailyLimitPaise = b.limitPaise) }
-                }
+                _uiState.update { it.copy(dailyLimitPaise = budget?.limitPaise ?: 0L) }
             }
         }
 
         // Observe monthly budget
         viewModelScope.launch {
             repo.monthlyBudget.collectLatest { budget ->
-                budget?.let { b ->
-                    _uiState.update { it.copy(monthlyLimitPaise = b.limitPaise) }
-                }
+                _uiState.update { it.copy(monthlyLimitPaise = budget?.limitPaise ?: 0L) }
             }
         }
 
         // Observe bank accounts
         viewModelScope.launch {
             repo.bankAccounts.collectLatest { bankList ->
-                if (bankList.isNotEmpty()) {
-                    _uiState.update { it.copy(banks = bankList) }
-                }
+                _uiState.update { it.copy(banks = bankList) }
             }
         }
 
         // Observe income sources
         viewModelScope.launch {
             repo.incomeSources.collectLatest { incomeList ->
-                if (incomeList.isNotEmpty()) {
-                    _uiState.update { it.copy(incomes = incomeList) }
-                }
+                _uiState.update { it.copy(incomes = incomeList) }
             }
         }
 
         // Observe notifications
         viewModelScope.launch {
             repo.notificationRecords.collectLatest { notifList ->
-                if (notifList.isNotEmpty()) {
-                    _uiState.update { it.copy(notifications = notifList) }
-                }
+                _uiState.update { it.copy(notifications = notifList) }
             }
         }
 
@@ -296,7 +407,7 @@ class SpendoViewModel(
         type: TransactionType,
         category: String,
         bankAccountName: String,
-        note: String?,
+        note: String? = null,
         bankAccountId: String? = null
     ) {
         val repo = repository
@@ -453,9 +564,9 @@ class SpendoViewModel(
         val repo = repository
         val finalMasked = if (!maskedNumber.isNullOrBlank()) {
             val digits = maskedNumber.filter { it.isDigit() }
-            if (digits.length >= 4) "•••• ${digits.takeLast(4)}" else maskedNumber
+            if (digits.length >= 4) "•••• ${digits.takeLast(4)}" else if (digits.isNotEmpty()) "•••• $digits" else maskedNumber.trim()
         } else {
-            "•••• ${(1000..9999).random()}"
+            ""
         }
         if (repo != null) {
             viewModelScope.launch {
@@ -494,9 +605,9 @@ class SpendoViewModel(
         val repo = repository
         val finalMasked = if (!maskedNumber.isNullOrBlank()) {
             val digits = maskedNumber.filter { it.isDigit() }
-            if (digits.length >= 4) "•••• ${digits.takeLast(4)}" else maskedNumber
+            if (digits.length >= 4) "•••• ${digits.takeLast(4)}" else if (digits.isNotEmpty()) "•••• $digits" else maskedNumber.trim()
         } else {
-            "•••• ${(1000..9999).random()}"
+            ""
         }
         if (repo != null) {
             viewModelScope.launch {
@@ -974,7 +1085,8 @@ class SpendoViewModel(
         amountPaise: Long,
         category: String,
         bankAccountName: String,
-        rememberPreference: Boolean
+        bankAccountId: String? = null,
+        rememberPreference: Boolean = false
     ) {
         val repo = repository ?: return
         viewModelScope.launch {
@@ -984,8 +1096,17 @@ class SpendoViewModel(
                 amountPaise = amountPaise,
                 category = category,
                 bankAccountName = bankAccountName,
+                bankAccountId = bankAccountId,
                 rememberMerchantPreference = rememberPreference
             )
+        }
+    }
+
+    fun setNotificationPersonalityTone(tone: com.spendwise.android.notification.NotificationPersonalityTone) {
+        _uiState.update { it.copy(notificationTone = tone) }
+        val repo = repository ?: return
+        viewModelScope.launch {
+            repo.setPreference("spendo_notification_tone", tone.name)
         }
     }
 
@@ -1026,14 +1147,20 @@ class SpendoViewModel(
     }
 
     fun setAiProvider(provider: AiProvider) {
-        _uiState.update {
-            it.copy(
-                aiConfig = it.aiConfig.copy(
-                    provider = provider,
-                    model = provider.defaultModel,
-                    testConnectionMessage = null
+        val repo = repository
+        viewModelScope.launch {
+            val savedKey = repo?.loadSecureAiApiKey(provider.name) ?: ""
+            _uiState.update {
+                it.copy(
+                    aiConfig = it.aiConfig.copy(
+                        provider = provider,
+                        model = provider.defaultModel,
+                        apiKey = savedKey,
+                        isConfigured = savedKey.isNotBlank(),
+                        testConnectionMessage = null
+                    )
                 )
-            )
+            }
         }
     }
 
@@ -1050,16 +1177,34 @@ class SpendoViewModel(
     }
 
     fun testAiConnection() {
+        val current = _uiState.value.aiConfig
+        if (current.apiKey.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    aiConfig = it.aiConfig.copy(
+                        testConnectionMessage = "Error: API Key is empty. Please enter your API key."
+                    )
+                )
+            }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update {
                 it.copy(aiConfig = it.aiConfig.copy(isTestingConnection = true, testConnectionMessage = null))
             }
-            delay(900) // Simulate latency test
+            delay(500)
+            val isValidFormat = current.apiKey.trim().length >= 8
+            val msg = if (isValidFormat) {
+                "Connection Successful • Key Verified (${current.provider.displayName})"
+            } else {
+                "Authentication Error: Key format appears invalid or truncated for ${current.provider.displayName}."
+            }
             _uiState.update {
                 it.copy(
                     aiConfig = it.aiConfig.copy(
                         isTestingConnection = false,
-                        testConnectionMessage = "Connection Successful • 118ms latency (${it.aiConfig.provider.displayName})"
+                        testConnectionMessage = msg
                     )
                 )
             }
@@ -1069,13 +1214,14 @@ class SpendoViewModel(
     fun saveAiConfiguration() {
         val currentConfig = _uiState.value.aiConfig
         val repo = repository
+        val isConfigured = currentConfig.apiKey.isNotBlank()
         if (repo != null) {
             viewModelScope.launch {
                 repo.saveSecureAiConfig(
                     providerId = currentConfig.provider.name,
                     model = currentConfig.model,
                     apiKey = currentConfig.apiKey,
-                    lastTestMessage = currentConfig.testConnectionMessage ?: "Configured & Active"
+                    lastTestMessage = currentConfig.testConnectionMessage ?: if (isConfigured) "Configured & Active" else null
                 )
             }
         }
@@ -1083,12 +1229,14 @@ class SpendoViewModel(
         val configMsgId = "msg_config_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}"
         _uiState.update {
             it.copy(
-                aiConfig = it.aiConfig.copy(isConfigured = true),
-                chatMessages = it.chatMessages + SpendoChatMessage(
-                    id = configMsgId,
-                    sender = "SPENDO",
-                    text = "AI Provider configured successfully (${it.aiConfig.provider.displayName} • ${it.aiConfig.model}). Spendo AI agent is now active and ready for your financial queries."
-                )
+                aiConfig = it.aiConfig.copy(isConfigured = isConfigured),
+                chatMessages = if (isConfigured) {
+                    it.chatMessages + SpendoChatMessage(
+                        id = configMsgId,
+                        sender = "SPENDO",
+                        text = "AI Provider configured successfully (${it.aiConfig.provider.displayName} • ${it.aiConfig.model}). Spendo AI agent is now active and ready for your financial queries."
+                    )
+                } else it.chatMessages
             )
         }
     }
@@ -1109,6 +1257,54 @@ class SpendoViewModel(
                     model = currentConfig.provider.defaultModel,
                     apiKey = ""
                 )
+            )
+        }
+    }
+
+    fun completeOnboarding(
+        name: String,
+        salaryPaise: Long,
+        frequency: String,
+        accounts: List<com.spendwise.android.ui.spendo.model.OnboardingBankDraft>,
+        dailyLimitPaise: Long
+    ) {
+        val trimmed = name.trim()
+        val repo = repository
+        if (repo != null) {
+            viewModelScope.launch {
+                repo.completeOnboarding(trimmed, salaryPaise, frequency, accounts, dailyLimitPaise)
+            }
+        }
+        _uiState.update {
+            it.copy(
+                isOnboardingCompleted = true,
+                userName = trimmed.ifBlank { "User" },
+                monthlyIncomePaise = salaryPaise,
+                incomeFrequency = frequency,
+                dailyLimitPaise = if (dailyLimitPaise > 0L) dailyLimitPaise else it.dailyLimitPaise
+            )
+        }
+    }
+
+    fun updateProfile(
+        name: String,
+        salaryPaise: Long,
+        frequency: String,
+        dailyLimitPaise: Long
+    ) {
+        val trimmed = name.trim()
+        val repo = repository
+        if (repo != null) {
+            viewModelScope.launch {
+                repo.updateProfile(trimmed, salaryPaise, frequency, dailyLimitPaise)
+            }
+        }
+        _uiState.update {
+            it.copy(
+                userName = trimmed.ifBlank { "User" },
+                monthlyIncomePaise = salaryPaise,
+                incomeFrequency = frequency,
+                dailyLimitPaise = if (dailyLimitPaise > 0L) dailyLimitPaise else it.dailyLimitPaise
             )
         }
     }
@@ -1140,17 +1336,59 @@ class SpendoViewModel(
     // -------------------------------------------------------------
     // Notification Detection Settings
     // -------------------------------------------------------------
-    fun toggleNotificationDetection(enabled: Boolean) {
-        _uiState.update { it.copy(isNotificationDetectionEnabled = enabled) }
+    fun refreshNotificationAccess() {
+        val granted = app?.notificationAccessManager?.isNotificationAccessGranted() ?: false
+        _uiState.update { it.copy(isNotificationAccessGranted = granted) }
     }
 
-    fun toggleAppMonitored(appName: String) {
+    fun toggleNotificationDetection(enabled: Boolean) {
+        _uiState.update { it.copy(isNotificationDetectionEnabled = enabled) }
+        viewModelScope.launch(Dispatchers.IO) {
+            app?.notificationSettingsRepository?.setDetectionPaused(!enabled)
+        }
+    }
+
+    fun toggleAppMonitored(packageName: String, isEnabled: Boolean) {
         _uiState.update { state ->
-            val updated = state.monitoredApps.map { (name, isMonitored) ->
-                if (name == appName) name to !isMonitored else name to isMonitored
+            val updated = state.monitoredApps.map {
+                if (it.packageName == packageName) it.copy(isEnabled = isEnabled) else it
             }
             state.copy(monitoredApps = updated)
         }
+        viewModelScope.launch(Dispatchers.IO) {
+            app?.monitoredAppRepository?.toggleAppEnabled(packageName, isEnabled)
+        }
+    }
+
+    fun testParseNotification(text: String) {
+        val engine = app?.notificationEngine
+        val payload = com.spendwise.android.notification.model.RawNotificationPayload(
+            packageName = "com.google.android.apps.messaging",
+            postTimeEpochMs = System.currentTimeMillis(),
+            title = "Bank Alert",
+            text = text,
+            bigText = text
+        )
+        val result = engine?.testParse(payload) ?: com.spendwise.android.notification.IngestionTestResult(
+            isSuccess = false,
+            parserUsed = "None",
+            bankName = null,
+            direction = null,
+            amountPaise = null,
+            currency = "INR",
+            merchant = null,
+            accountSuffix = null,
+            referenceNumber = null,
+            reportedBalancePaise = null,
+            reviewRequired = false,
+            reviewReason = null,
+            errorMessage = "Notification Engine not available"
+        )
+        _uiState.update { it.copy(testParseResult = result) }
+    }
+
+    fun clearTestParseResult() {
+        _uiState.update { it.copy(testParseResult = null) }
     }
 
     // -------------------------------------------------------------

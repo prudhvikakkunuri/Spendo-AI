@@ -55,35 +55,36 @@ fun SpendoStreaksScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val hasAnyExpense = uiState.transactions.any { it.type == com.spendwise.android.ui.spendo.model.TransactionType.EXPENSE }
     val badges = listOf(
         AchievementBadge(
             title = "First Step",
             description = "Tracked initial financial expense in Spendo",
-            isUnlocked = true,
+            isUnlocked = hasAnyExpense,
             icon = Icons.Outlined.Check
         ),
         AchievementBadge(
             title = "Streak Builder",
             description = "Maintained 5 consecutive days within daily ceiling",
-            isUnlocked = true,
+            isUnlocked = uiState.currentStreakDays >= 5,
             icon = Icons.Outlined.LocalFireDepartment
         ),
         AchievementBadge(
             title = "Shield of Savings",
-            description = "Kept discretionary weekend spending under budget limit",
-            isUnlocked = true,
+            description = "Maintained 7 consecutive days within daily ceiling",
+            isUnlocked = uiState.currentStreakDays >= 7,
             icon = Icons.Outlined.Shield
         ),
         AchievementBadge(
             title = "Financial Zenith",
             description = "Surpass 14 days consecutive disciplined streak",
-            isUnlocked = false,
+            isUnlocked = uiState.currentStreakDays >= 14,
             icon = Icons.Outlined.EmojiEvents
         ),
         AchievementBadge(
             title = "Zen Master",
             description = "Complete an entire monthly cycle with 0 impulse spikes",
-            isUnlocked = false,
+            isUnlocked = uiState.currentStreakDays >= 30,
             icon = Icons.Outlined.Spa
         )
     )
@@ -121,7 +122,7 @@ fun SpendoStreaksScreen(
                                 textColor = SpendoColor.CardDarkText
                             )
                             Text(
-                                text = "BEST: 14 DAYS",
+                                text = "BEST: ${maxOf(uiState.currentStreakDays, if (hasAnyExpense) 1 else 0)} DAYS",
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -152,7 +153,8 @@ fun SpendoStreaksScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-                            val streakStatus = listOf(true, true, true, true, true, false, true)
+                            val activeCount = minOf(uiState.currentStreakDays, 7)
+                            val streakStatus = List(7) { idx -> idx < activeCount }
                             days.forEachIndexed { idx, day ->
                                 val passed = streakStatus[idx]
                                 Column(

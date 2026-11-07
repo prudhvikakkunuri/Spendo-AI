@@ -752,6 +752,9 @@ class SpendoFinancialAuditUnitTest {
         override fun getPendingReviewCount(): Flow<Int> =
             flowOf(transactions.count { it.reviewStatus == "NEEDS_REVIEW" })
 
+        override suspend fun getPendingReviewCountDirect(): Int =
+            transactions.count { it.reviewStatus == "NEEDS_REVIEW" }
+
         override suspend fun findPotentialDuplicates(
             amountPaise: Long,
             direction: String,
@@ -784,6 +787,9 @@ class SpendoFinancialAuditUnitTest {
         override fun getTransactionsForMerchant(merchantQuery: String): Flow<List<TransactionEntity>> = flowOf(emptyList())
         override suspend fun getMerchantTotalSpendDirect(merchantQuery: String): Long =
             transactions.filter { (it.merchant ?: "").contains(merchantQuery, ignoreCase = true) && it.direction == "DEBIT" && it.reviewStatus == "CONFIRMED" }.sumOf { it.amountPaise }
+
+        override suspend fun getTransactionCountForAccount(bankAccountId: String): Int =
+            transactions.count { it.bankAccountId == bankAccountId }
     }
 
     private class InMemoryBankAccountDao : BankAccountDao {
@@ -796,6 +802,10 @@ class SpendoFinancialAuditUnitTest {
         override suspend fun getBankAccountByNameDirect(bankName: String): BankAccountEntity? = accounts.firstOrNull { it.bankName.equals(bankName, ignoreCase = true) }
         override suspend fun getBankAccountsByNameDirectList(bankName: String): List<BankAccountEntity> = accounts.filter { it.bankName.equals(bankName, ignoreCase = true) }
         override suspend fun getBankAccountByNameAndNumberDirect(bankName: String, maskedNumber: String): BankAccountEntity? = accounts.firstOrNull { it.bankName.equals(bankName, ignoreCase = true) && it.maskedAccountNumber == maskedNumber }
+        override suspend fun getBankAccountsBySuffixDirect(suffix: String): List<BankAccountEntity> =
+            accounts.filter { it.maskedAccountNumber.endsWith(suffix) }
+        override suspend fun getBankAccountsByNameAndSuffixDirect(bankName: String, suffix: String): List<BankAccountEntity> =
+            accounts.filter { it.bankName.equals(bankName, ignoreCase = true) && it.maskedAccountNumber.endsWith(suffix) }
         override suspend fun getBankAccountCount(): Int = accounts.size
 
         override suspend fun insertBankAccount(account: BankAccountEntity) {

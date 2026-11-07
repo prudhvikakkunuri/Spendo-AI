@@ -42,16 +42,35 @@ import androidx.compose.ui.unit.sp
 import com.spendwise.android.ui.spendo.components.DotMatrixPattern
 import com.spendwise.android.ui.spendo.components.DotMatrixText
 import com.spendwise.android.ui.spendo.components.SpendoCard
+import com.spendwise.android.ui.spendo.components.SpendoCompactButton
 import com.spendwise.android.ui.spendo.components.SpendoDarkCard
 import com.spendwise.android.ui.spendo.components.SpendoTopBar
 import com.spendwise.android.ui.spendo.theme.SpendoColor
+import androidx.compose.ui.text.style.TextOverflow
 
 import com.spendwise.android.ui.spendo.theme.ThemeMode
+
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import com.spendwise.android.ui.spendo.components.SpendoTextField
 
 @Composable
 fun SpendoSettingsScreen(
     currentThemeMode: ThemeMode = ThemeMode.SYSTEM,
     onThemeModeChange: (ThemeMode) -> Unit = {},
+    userName: String = "User",
+    monthlyIncomePaise: Long = 0L,
+    incomeFrequency: String = "Monthly",
+    dailyLimitPaise: Long = 250000L,
+    onUpdateProfile: (name: String, salaryPaise: Long, freq: String, dailyLimitPaise: Long) -> Unit = { _, _, _, _ -> },
     onNavigateToSecurity: () -> Unit,
     onNavigateToBanks: () -> Unit,
     onNavigateToBudgets: () -> Unit,
@@ -63,6 +82,11 @@ fun SpendoSettingsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showEditProfileDialog by remember { mutableStateOf(false) }
+    var editName by remember(userName) { mutableStateOf(userName) }
+    var editSalaryText by remember(monthlyIncomePaise) { mutableStateOf(if (monthlyIncomePaise > 0L) (monthlyIncomePaise / 100).toString() else "") }
+    var editDailyLimitText by remember(dailyLimitPaise) { mutableStateOf((dailyLimitPaise / 100).toString()) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -104,6 +128,100 @@ fun SpendoSettingsScreen(
                         }
 
                         DotMatrixPattern(color = androidx.compose.ui.graphics.Color(0xFF333333))
+                    }
+                }
+            }
+
+            // Section: User Profile & Identity
+            item {
+                DotMatrixText(text = "User Profile & Identity", fontSize = 11.sp, color = SpendoColor.TextSecondary)
+            }
+
+            item {
+                SpendoCard(contentPadding = 16.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(SpendoColor.SurfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Person,
+                                        contentDescription = null,
+                                        tint = SpendoColor.TextPrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = userName.ifBlank { "User" },
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SpendoColor.TextPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    val incomeText = if (monthlyIncomePaise > 0L) {
+                                        "Private Salary: ₹%,.2f (%s)".format(java.util.Locale.ENGLISH, monthlyIncomePaise / 100.0, incomeFrequency)
+                                    } else {
+                                        "Income preference not configured"
+                                    }
+                                    Text(
+                                        text = incomeText,
+                                        fontSize = 12.sp,
+                                        color = SpendoColor.TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            SpendoCompactButton(
+                                text = "Edit",
+                                onClick = { showEditProfileDialog = true },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Edit,
+                                        contentDescription = "Edit Profile",
+                                        tint = SpendoColor.TextPrimary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Daily Spending Limit",
+                                fontSize = 12.sp,
+                                color = SpendoColor.TextSecondary
+                            )
+                            Text(
+                                text = "₹%,.2f".format(java.util.Locale.ENGLISH, dailyLimitPaise / 100.0),
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = SpendoColor.TextPrimary
+                            )
+                        }
                     }
                 }
             }
@@ -282,9 +400,97 @@ fun SpendoSettingsScreen(
                 }
             }
 
+            // Section: Official Spendo Brand Footer
             item {
-                Spacer(modifier = Modifier.height(24.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    com.spendwise.android.ui.spendo.components.SpendoNeuralMonogram(
+                        size = 40.dp,
+                        showGlyphRing = true
+                    )
+                    Text(
+                        text = "SPENDO",
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        letterSpacing = 4.sp,
+                        color = SpendoColor.TextPrimary
+                    )
+                    Text(
+                        text = "YOUR MONEY. YOUR CONTROL. • v1.0.0",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.sp,
+                        color = SpendoColor.TextSecondary
+                    )
+                }
             }
+
+            item {
+                Spacer(modifier = Modifier.height(84.dp))
+            }
+        }
+
+        if (showEditProfileDialog) {
+            AlertDialog(
+                onDismissRequest = { showEditProfileDialog = false },
+                containerColor = SpendoColor.Surface,
+                title = {
+                    Text(
+                        text = "Edit Profile",
+                        fontWeight = FontWeight.Bold,
+                        color = SpendoColor.TextPrimary
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SpendoTextField(
+                            value = editName,
+                            onValueChange = { editName = it },
+                            label = "Display Name",
+                            placeholder = "Enter your name"
+                        )
+
+                        SpendoTextField(
+                            value = editSalaryText,
+                            onValueChange = { editSalaryText = it.filter { ch -> ch.isDigit() } },
+                            label = "Monthly Salary (₹, Private)",
+                            placeholder = "e.g. 85000",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+
+                        SpendoTextField(
+                            value = editDailyLimitText,
+                            onValueChange = { editDailyLimitText = it.filter { ch -> ch.isDigit() } },
+                            label = "Daily Spending Limit (₹)",
+                            placeholder = "e.g. 2500",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val salaryPaise = (editSalaryText.toLongOrNull() ?: 0L) * 100L
+                            val limitPaise = (editDailyLimitText.toLongOrNull() ?: (dailyLimitPaise / 100)) * 100L
+                            onUpdateProfile(editName.trim().ifBlank { "User" }, salaryPaise, incomeFrequency, limitPaise)
+                            showEditProfileDialog = false
+                        }
+                    ) {
+                        Text("Save", color = SpendoColor.TextPrimary, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditProfileDialog = false }) {
+                        Text("Cancel", color = SpendoColor.TextSecondary)
+                    }
+                }
+            )
         }
     }
 }
@@ -330,12 +536,16 @@ private fun SettingsNavRow(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = SpendoColor.TextPrimary
+                    color = SpendoColor.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = SpendoColor.TextSecondary
+                    color = SpendoColor.TextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
