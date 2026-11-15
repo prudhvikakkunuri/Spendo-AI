@@ -108,7 +108,7 @@ export const FeatureShowcase: React.FC = () => {
                     <div className="text-[10px] font-mono-tech text-[#71717A] break-all">Package: com.google.android.apps.nbu.paisa.user</div>
                   </div>
                 </div>
-                <span className="self-start sm:self-auto shrink-0 px-2 py-0.5 rounded text-[10px] font-mono-tech bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30">
+                <span className="self-start sm:self-auto shrink-0 w-16 max-w-16 px-1 py-1 rounded text-[9px] leading-tight text-center whitespace-normal break-words font-mono-tech bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30">
                   AUTO-LOGGED
                 </span>
               </div>
