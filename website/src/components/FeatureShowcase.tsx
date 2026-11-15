@@ -98,17 +98,17 @@ export const FeatureShowcase: React.FC = () => {
             icon={<BellRing className="w-5 h-5" />}
             colSpan="md:col-span-2 lg:col-span-2"
             visualPreview={
-              <div className="p-3.5 rounded-2xl bg-[#09090B] border border-[#27272E] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#D71920]/10 border border-[#D71920]/30 flex items-center justify-center font-mono-tech font-bold text-xs text-[#D71920]">
+              <div className="p-3.5 rounded-2xl bg-[#09090B] border border-[#27272E] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 min-w-0">
+                <div className="flex items-start sm:items-center gap-3 min-w-0 w-full">
+                  <div className="w-8 h-8 shrink-0 rounded-lg bg-[#D71920]/10 border border-[#D71920]/30 flex items-center justify-center font-mono-tech font-bold text-xs text-[#D71920]">
                     UPI
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-white">Detected: Swiggy · ₹349.00</div>
-                    <div className="text-[10px] font-mono-tech text-[#71717A]">Package: com.google.android.apps.nbu.paisa.user</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-white break-words">Detected: Swiggy · ₹349.00</div>
+                    <div className="text-[10px] font-mono-tech text-[#71717A] break-all">Package: com.google.android.apps.nbu.paisa.user</div>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono-tech bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30">
+                <span className="self-start sm:self-auto shrink-0 px-2 py-0.5 rounded text-[10px] font-mono-tech bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/30">
                   AUTO-LOGGED
                 </span>
               </div>
